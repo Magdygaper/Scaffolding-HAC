@@ -1,895 +1,216 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>HAC Equipment List</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<html lang="en" dir="ltr"><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HAC · Formwork PR Creator</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
-:root{--bg:#0d1117;--surface:#161b22;--surface2:#1c2128;--border:#30363d;--accent:#f0a500;--text:#e6edf3;--text-muted:#7d8590;--green:#3fb950;--red:#f85149;--blue:#58a6ff;--radius:8px;}
-*{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;min-height:100vh;}
-
-/* AUTH */
-#auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 60% 20%,#1a1000 0%,var(--bg) 60%);}
-.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:48px 40px;width:360px;text-align:center;}
-.auth-logo{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent);letter-spacing:3px;margin-bottom:8px;}
-.auth-title{font-size:22px;font-weight:700;margin-bottom:4px;}
-.auth-sub{color:var(--text-muted);font-size:13px;margin-bottom:32px;}
-.auth-card input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:var(--radius);font-size:14px;margin-bottom:12px;outline:none;transition:border .2s;}
-.auth-card input:focus{border-color:var(--accent);}
-.btn-primary{width:100%;background:var(--accent);color:#000;border:none;padding:11px;border-radius:var(--radius);font-weight:600;font-size:14px;cursor:pointer;}
-.auth-err{color:var(--red);font-size:12px;margin-top:8px;min-height:18px;}
-
-/* LAYOUT */
-#app{display:none;}
-.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
-.topbar-left{display:flex;align-items:center;gap:16px;}
-.logo-mark{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent);letter-spacing:2px;}
-.topbar-title{font-size:15px;font-weight:600;}
-.topbar-right{display:flex;align-items:center;gap:12px;}
-.badge-role{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:11px;color:var(--text-muted);}
-.badge-role.admin{border-color:var(--accent);color:var(--accent);}
-.btn-sm{background:transparent;border:1px solid var(--border);color:var(--text-muted);padding:5px 12px;border-radius:var(--radius);cursor:pointer;font-size:12px;}
-.btn-sm:hover{border-color:var(--text-muted);color:var(--text);}
-.main{display:flex;}
-.sidebar{width:220px;min-height:calc(100vh - 56px);background:var(--surface);border-right:1px solid var(--border);padding:20px 12px;flex-shrink:0;}
-.nav-label{font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;padding:0 8px;margin-bottom:6px;margin-top:16px;}
-.nav-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--radius);cursor:pointer;color:var(--text-muted);font-size:13px;transition:all .15s;margin-bottom:2px;border:none;background:none;width:100%;text-align:left;}
-.nav-item:hover{background:var(--surface2);color:var(--text);}
-.nav-item.active{background:rgba(240,165,0,.1);color:var(--accent);}
-.content{flex:1;padding:28px 32px;overflow-x:auto;}
-.page{display:none;}.page.active{display:block;}
-.section-title{font-size:18px;font-weight:700;margin-bottom:6px;}
-.section-sub{color:var(--text-muted);font-size:13px;margin-bottom:24px;}
-
-/* DASHBOARD CARDS */
-.dash-section-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;margin-top:24px;}
-.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:8px;}
-.dash-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;}
-.dash-card:hover{border-color:var(--accent);transform:translateY(-1px);}
-.dash-card.active{border-color:var(--accent);background:rgba(240,165,0,.08);}
-.dash-card-val{font-size:26px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--accent);}
-.dash-card-label{font-size:11px;color:var(--text-muted);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.dash-card-sub{font-size:10px;color:var(--text-muted);margin-top:2px;opacity:.7;}
-
-/* PROJECT LIST FILTER */
-.proj-filter-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:8px;}
-.proj-search{width:100%;background:var(--surface2);border:none;border-bottom:1px solid var(--border);color:var(--text);padding:10px 16px;font-size:13px;outline:none;font-family:inherit;}
-.proj-search::placeholder{color:var(--text-muted);}
-.proj-list{max-height:260px;overflow-y:auto;}
-.proj-list::-webkit-scrollbar{width:4px;}
-.proj-list::-webkit-scrollbar-track{background:transparent;}
-.proj-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
-.proj-row{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;cursor:pointer;border-bottom:1px solid var(--border);transition:all .15s;}
-.proj-row:last-child{border-bottom:none;}
-.proj-row:hover{background:var(--surface2);}
-.proj-row.active{background:rgba(240,165,0,.08);border-left:3px solid var(--accent);}
-.proj-row-left{display:flex;align-items:center;gap:10px;}
-.proj-dot{width:8px;height:8px;border-radius:50%;background:var(--blue);flex-shrink:0;}
-.proj-row.active .proj-dot{background:var(--accent);}
-.proj-name{font-size:13px;color:var(--text);}
-.proj-row.active .proj-name{color:var(--accent);font-weight:600;}
-.proj-od{font-size:11px;color:var(--text-muted);}
-.proj-count{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-muted);background:var(--surface2);padding:2px 8px;border-radius:10px;}
-.proj-row.active .proj-count{background:rgba(240,165,0,.15);color:var(--accent);}
-
-/* OD BUTTONS */
-.od-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;}
-.od-btn{background:var(--surface);border:1px solid var(--border);color:var(--text-muted);padding:7px 14px;border-radius:20px;cursor:pointer;font-size:12px;transition:all .2s;}
-.od-btn:hover{border-color:var(--accent);color:var(--accent);}
-.od-btn.active{background:rgba(240,165,0,.15);border-color:var(--accent);color:var(--accent);font-weight:600;}
-
-/* BREAKDOWN MODAL */
-.breakdown-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:300;align-items:center;justify-content:center;}
-.breakdown-overlay.open{display:flex;}
-.breakdown-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px 32px;width:560px;max-width:95vw;max-height:85vh;overflow-y:auto;}
-.breakdown-title{font-size:16px;font-weight:700;margin-bottom:4px;}
-.breakdown-sub{font-size:12px;color:var(--text-muted);margin-bottom:20px;}
-.breakdown-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
-.breakdown-rank{font-size:11px;color:var(--text-muted);width:20px;text-align:right;flex-shrink:0;}
-.breakdown-name{font-size:13px;width:200px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.breakdown-track{flex:1;height:10px;background:var(--surface2);border-radius:5px;overflow:hidden;}
-.breakdown-fill{height:100%;border-radius:5px;transition:width .5s;}
-.breakdown-count{font-size:12px;font-family:'JetBrains Mono',monospace;width:32px;text-align:right;flex-shrink:0;}
-.breakdown-close{margin-top:20px;background:var(--surface2);border:1px solid var(--border);color:var(--text-muted);padding:8px 20px;border-radius:var(--radius);cursor:pointer;font-size:13px;float:right;}
-
-/* TOOLBAR */
-.toolbar{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center;}
-.search-box{flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:var(--radius);font-size:13px;outline:none;transition:border .2s;}
-.search-box:focus{border-color:var(--accent);}
-select{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-size:13px;cursor:pointer;outline:none;}
-.btn-add{background:var(--accent);color:#000;border:none;padding:8px 18px;border-radius:var(--radius);font-weight:600;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px;}
-.btn-add:hover{opacity:.85;}
-.active-filter-bar{background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.3);border-radius:var(--radius);padding:8px 14px;margin-bottom:14px;font-size:12px;color:var(--accent);display:flex;justify-content:space-between;align-items:center;}
-.clear-filter{cursor:pointer;color:var(--text-muted);font-size:11px;text-decoration:underline;}
-
-/* TABLE */
-.table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);}
-table{width:100%;border-collapse:collapse;}
-thead{background:var(--surface2);}
-th{padding:10px 14px;text-align:left;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--border);}
-td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle;white-space:nowrap;font-size:13px;}
-tr:last-child td{border-bottom:none;}
-tr:hover td{background:var(--surface2);}
-.code-cell{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);}
-.cat-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;background:var(--surface2);border:1px solid var(--border);color:var(--text-muted);}
-.action-btns{display:flex;gap:6px;}
-.btn-edit,.btn-del,.btn-transfer{padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;border:1px solid;transition:all .15s;background:transparent;}
-.btn-edit{border-color:var(--blue);color:var(--blue);}
-.btn-edit:hover{background:var(--blue);color:#000;}
-.btn-del{border-color:var(--red);color:var(--red);}
-.btn-del:hover{background:var(--red);color:#fff;}
-.btn-transfer{border-color:var(--green);color:var(--green);}
-.btn-transfer:hover{background:var(--green);color:#000;}
-
-/* MODAL */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;}
-.modal-overlay.open{display:flex;}
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px 32px;width:620px;max-width:95vw;max-height:90vh;overflow-y:auto;}
-.modal-title{font-size:16px;font-weight:700;margin-bottom:20px;}
-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-.form-group{display:flex;flex-direction:column;gap:5px;}
-.form-group.full{grid-column:1/-1;}
-.form-group label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;}
-.form-group input,.form-group select,.form-group textarea{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:var(--radius);font-size:13px;outline:none;transition:border .2s;font-family:inherit;}
-.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent);}
-.form-group input[readonly]{opacity:.6;}
-.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:24px;}
-.btn-cancel{background:transparent;border:1px solid var(--border);color:var(--text-muted);padding:9px 20px;border-radius:var(--radius);cursor:pointer;font-size:13px;}
-.btn-save{background:var(--accent);color:#000;border:none;padding:9px 24px;border-radius:var(--radius);font-weight:600;cursor:pointer;font-size:13px;}
-
-/* TRANSFER LOG */
-.transfer-item{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;}
-.transfer-info{flex:1;}
-.transfer-arrow{color:var(--accent);font-weight:700;margin:0 6px;}
-.transfer-meta{font-size:11px;color:var(--text-muted);margin-top:4px;}
-
-.loading{text-align:center;padding:60px;color:var(--text-muted);}
-.spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px;}
-@keyframes spin{to{transform:rotate(360deg);}}
-.empty{text-align:center;padding:60px;color:var(--text-muted);}
-#toast{position:fixed;bottom:24px;right:24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 20px;font-size:13px;z-index:999;transform:translateY(80px);opacity:0;transition:all .3s;pointer-events:none;}
-#toast.show{transform:translateY(0);opacity:1;}
-#toast.success{border-color:var(--green);color:var(--green);}
-#toast.error{border-color:var(--red);color:var(--red);}
-</style>
-</head>
-<body>
-
-<!-- AUTH -->
-<div id="auth-screen">
-  <div class="auth-card">
-    <div class="auth-logo">HAC · PMV</div>
-    <div class="auth-title">Equipment List</div>
-    <div class="auth-sub">Hassan Allam Construction</div>
-    <input type="email" id="login-email" placeholder="Email" />
-    <input type="password" id="login-pass" placeholder="Password" />
-    <button class="btn-primary" onclick="doLogin()">Sign In</button>
-    <div class="auth-err" id="auth-err"></div>
-  </div>
-</div>
-
-<!-- APP -->
-<div id="app">
-  <div class="topbar">
-    <div class="topbar-left">
-      <div class="logo-mark">HAC · PMV</div>
-      <div class="topbar-title">Equipment List</div>
-    </div>
-    <div class="topbar-right">
-      <span class="badge-role" id="role-badge">Viewer</span>
-      <button class="btn-sm" onclick="doLogout()">Logout</button>
-    </div>
-  </div>
-  <div class="main">
-    <div class="sidebar">
-      <div class="nav-label">Menu</div>
-      <button class="nav-item active" onclick="showPage('dashboard',this)">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        Dashboard
-      </button>
-      <button class="nav-item" onclick="showPage('equipment',this)">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
-        Equipment List
-      </button>
-      <button class="nav-item" onclick="showPage('transfers',this)">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
-        Transfer Log
-      </button>
-    </div>
-
-    <div class="content">
-
-      <!-- DASHBOARD -->
-      <div class="page active" id="page-dashboard">
-        <div class="section-title">Dashboard</div>
-        <div class="section-sub">Click any card to filter equipment</div>
-
-        <div class="dash-section-label">By Category — click to filter & view breakdown</div>
-        <div class="cards-grid" id="cat-cards"></div>
-
-        <div class="dash-section-label">By Project — click to filter</div>
-        <div class="proj-filter-wrap">
-          <input class="proj-search" type="text" id="proj-search-input" placeholder="🔍  Search project..." oninput="filterProjList()" />
-          <div class="proj-list" id="proj-list"></div>
-        </div>
-
-        <div class="dash-section-label">By O.D — click to filter</div>
-        <div class="od-buttons" id="od-buttons"></div>
-
-        <!-- OD CHART -->
-        <div id="od-chart-wrap" style="display:none;margin-top:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-            <div>
-              <div style="font-size:14px;font-weight:700;" id="od-chart-title"></div>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:2px;" id="od-chart-sub"></div>
-            </div>
-            <div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700;color:var(--accent);" id="od-chart-total"></div>
-          </div>
-          <div id="od-chart-bars"></div>
-        </div>
-      </div>
-
-      <!-- EQUIPMENT LIST -->
-      <div class="page" id="page-equipment">
-        <div class="section-title">Equipment List</div>
-        <div id="active-filter-bar" style="display:none" class="active-filter-bar">
-          <span id="filter-bar-text"></span>
-          <span class="clear-filter" onclick="clearAllFilters()">✕ Clear filter</span>
-        </div>
-        <div class="toolbar">
-          <input class="search-box" type="text" id="search-input" placeholder="Search by name, code, brand..." oninput="renderTable()" />
-          <select id="filter-cat" onchange="renderTable()"><option value="">All Categories</option></select>
-          <select id="filter-type" onchange="renderTable()"><option value="">All Types</option></select>
-          <select id="filter-proj" onchange="renderTable()"><option value="">All Projects</option></select>
-          <button class="btn-add" id="btn-add-eq" style="display:none" onclick="openAddModal()">+ Add Equipment</button>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>#</th><th>Category</th><th>Equipment</th><th>Brand / Model</th>
-                <th>Code</th><th>Project</th><th>O.D</th><th>Year</th>
-                <th id="actions-col" style="display:none">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="table-body"></tbody>
-          </table>
-        </div>
-        <div id="table-loading" class="loading"><div class="spinner"></div>Loading...</div>
-        <div id="table-empty" class="empty" style="display:none">No equipment found.</div>
-      </div>
-
-      <!-- TRANSFER LOG -->
-      <div class="page" id="page-transfers">
-        <div class="section-title">Transfer Log</div>
-        <div class="section-sub">History of all equipment transfers</div>
-        <div class="toolbar">
-          <input class="search-box" type="text" id="transfer-search" placeholder="Search by code or equipment name..." oninput="filterTransfers()" />
-        </div>
-        <div id="transfers-list"><div class="loading"><div class="spinner"></div>Loading...</div></div>
-      </div>
-
-    </div>
-  </div>
-</div>
-
-<!-- BREAKDOWN MODAL -->
-<div class="breakdown-overlay" id="breakdown-modal">
-  <div class="breakdown-box">
-    <div class="breakdown-title" id="bd-title"></div>
-    <div class="breakdown-sub" id="bd-sub"></div>
-    <div id="bd-content"></div>
-    <button class="breakdown-close" onclick="closeBreakdown()">Close</button>
-  </div>
-</div>
-
-<!-- ADD/EDIT MODAL -->
-<div class="modal-overlay" id="eq-modal">
-  <div class="modal">
-    <div class="modal-title" id="modal-title">Add Equipment</div>
-    <div class="form-grid">
-      <div class="form-group"><label>Category</label>
-        <select id="f-category">
-          <option>Earthmoving Equipment</option><option>Compaction Equipment</option>
-          <option>Power & Utilities</option><option>Concrete Equipment</option>
-          <option>Lifting Equipment</option><option>Ground Engineering</option>
-          <option>Special Equipment</option><option>Pumping Equipment</option>
-        </select>
-      </div>
-      <div class="form-group"><label>Equipment Type</label><input type="text" id="f-equipment" placeholder="e.g. Excavator"/></div>
-      <div class="form-group full"><label>Brand / Model</label><input type="text" id="f-brand"/></div>
-      <div class="form-group"><label>Code / Board No.</label><input type="text" id="f-code"/></div>
-      <div class="form-group"><label>Code SAP</label><input type="text" id="f-sap"/></div>
-      <div class="form-group"><label>Chassis No.</label><input type="text" id="f-chassis"/></div>
-      <div class="form-group"><label>Engine Model</label><input type="text" id="f-engine"/></div>
-      <div class="form-group"><label>Engine S/N</label><input type="text" id="f-enginesn"/></div>
-      <div class="form-group"><label>Manuf. Year</label><input type="number" id="f-year"/></div>
-      <div class="form-group"><label>Power</label><input type="text" id="f-power"/></div>
-      <div class="form-group"><label>Current Project</label><input type="text" id="f-project" oninput="autoFillOd()"/></div>
-      <div class="form-group"><label>O.D (auto-filled)</label><input type="text" id="f-od" placeholder="Auto from project"/></div>
-      <div class="form-group"><label>Cost Center</label><input type="text" id="f-costcenter"/></div>
-      <div class="form-group"><label>Market Value</label><input type="text" id="f-value"/></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeModal('eq-modal')">Cancel</button>
-      <button class="btn-save" onclick="saveEquipment()">Save</button>
-    </div>
-  </div>
-</div>
-
-<!-- TRANSFER MODAL -->
-<div class="modal-overlay" id="transfer-modal">
-  <div class="modal">
-    <div class="modal-title">Transfer Equipment</div>
-    <input type="hidden" id="t-eq-id"/>
-    <div class="form-grid">
-      <div class="form-group full"><label>Equipment</label><input type="text" id="t-eq-name" readonly/></div>
-      <div class="form-group"><label>From Project</label><input type="text" id="t-from" readonly/></div>
-      <div class="form-group"><label>To Project</label><input type="text" id="t-to" oninput="autoFillTransferOd()"/></div>
-      <div class="form-group"><label>New O.D (auto)</label><input type="text" id="t-od" readonly/></div>
-      <div class="form-group"><label>Transfer Date</label><input type="date" id="t-date"/></div>
-      <div class="form-group"><label>Requested By</label><input type="text" id="t-requested-by" placeholder="Name of person who requested transfer"/></div>
-      <div class="form-group full">
-        <label>PDF Attachment</label>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <input type="text" id="t-attachment" placeholder="رابط الـ PDF هيظهر هنا تلقائي..." autocomplete="off" spellcheck="false" style="flex:1;min-width:200px;" onpaste="event.preventDefault();var t=(event.clipboardData||window.clipboardData).getData('text/plain');this.value=t.trim();"/>
-          <label id="upload-btn-label" style="background:var(--accent);color:#000;padding:8px 14px;border-radius:var(--radius);cursor:pointer;font-size:12px;white-space:nowrap;flex-shrink:0;font-weight:600;display:inline-flex;align-items:center;gap:4px;">
-            📎 Upload PDF
-            <input type="file" accept="application/pdf" style="display:none;" onchange="uploadToCloudinary(this)"/>
-          </label>
-          <span id="upload-status" style="font-size:12px;color:var(--text-muted);"></span>
-        </div>
-      </div>
-      <div class="form-group full"><label>Notes</label><textarea id="t-notes" rows="2"></textarea></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeModal('transfer-modal')">Cancel</button>
-      <button class="btn-save" onclick="saveTransfer()">Confirm Transfer</button>
-    </div>
-  </div>
-</div>
-
-<div id="toast"></div>
-
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-
-const firebaseConfig = {
-  apiKey:"AIzaSyBb9KUiy-0IJFMPqLrGDF3EZxQ1k68UDL4",
-  authDomain:"equipment-list-hac.firebaseapp.com",
-  projectId:"equipment-list-hac",
-  storageBucket:"equipment-list-hac.firebasestorage.app",
-  messagingSenderId:"453574081349",
-  appId:"1:453574081349:web:3c705185463d987c649c2c"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-const ADMINS = ["magdygaperarqam@gmail.com"];
-
-const OD_MAP = {"Bab Masr":"Eng. Mostafa Morsi","El Bank El Araby":"Eng. Mostafa Morsi","Kayan":"Eng. Mostafa Morsi","Luxor":"Eng. Mostafa Morsi","Mansoura 2":"Eng. Mostafa Morsi","R05":"Eng. Mostafa Morsi","SCB":"Eng. Mostafa Morsi","Al Shohadaa Central hospital":"Eng. Tamer Hagag","Alamein Station":"Eng. Tamer Hagag","Haptowen":"Eng. Tamer Hagag","Locanda":"Eng. Tamer Hagag","Naser Institute":"Eng. Tamer Hagag","Silver Sand":"Eng. Tamer Hagag","Sofitel Hotel":"Eng. Tamer Hagag","Soul":"Eng. Tamer Hagag","swan Lake - 2":"Eng. Tamer Hagag","Wadi Natroun":"Eng. Tamer Hagag","Abou Oweikal":"Eng. Ahmed Nezar","Abou Qir JV":"Eng. Ahmed Nezar","Alex Tram":"Eng. Ahmed Nezar","El Ayaat Project":"Eng. Ahmed Nezar","intake mostakbal Misr":"Eng. Ahmed Nezar","Metro Line 4":"Eng. Ahmed Nezar","Mostakbal Masr Zone (G)":"Eng. Ahmed Nezar","Safaga Port":"Eng. Ahmed Nezar","Sokhna Port":"Eng. Ahmed Nezar","TBM - Metro L4":"Eng. Ahmed Nezar","Toshka":"Eng. Ahmed Nezar","Benban 200 MW":"Eng. Hany Fayd","El Dabaa":"Eng. Hany Fayd","marasy":"Eng. Essam Ibrahim","Ras Elhekma":"Eng. Waled Fahmy","Allam Block ( 10th of ramadan )":"Eng. Mohamed Mostafa","Allam Block ( Safaga Port )":"Eng. Mohamed Mostafa","Central Workshop":"Eng. Mohamed Mostafa","hassan allam complex":"Eng. Mohamed Mostafa","Heavy Transportation Workshop":"Eng. Mohamed Mostafa","Scaffolding":"Eng. Mohamed Mostafa","Ware House( 10th of ramadan )":"Eng. Mohamed Mostafa","10th OF RAMADAN":"Eng. Mohamed Mostafa","Sant Catreen":"Eng. Abdelaziz Ibrahim","Cairo Festival":"Eng. Hamdy Swillam","Hard 350":"Eng. Hamdy Swillam","Mansoura 1":"Eng. Hamdy Swillam","Mavida Garden":"Eng. Hamdy Swillam","Allam steel":"Eng. Salah Shaker","New Capital Tran-Hub":"Eng. Mohamed Salem","Afrexim Bank":"Eng. Islam El Sayed","Al Alamen Towers JV":"Eng. Mohamed Abdellatif"};
-
-const CAT_COLORS = {"Earthmoving Equipment":"#f0a500","Compaction Equipment":"#58a6ff","Power & Utilities":"#3fb950","Concrete Equipment":"#e05c00","Lifting Equipment":"#a371f7","Ground Engineering":"#39d353","Special Equipment":"#ff7b72","Pumping Equipment":"#ffa657"};
-
-let currentUser=null, isAdmin=false;
-let allEquipment=[], allTransfers=[];
-let editingId=null;
-let multiFilter={od:null, cat:null, proj:null};
-
-function getOd(p){
-  if(!p) return '';
-  if(OD_MAP[p]) return OD_MAP[p];
-  const l=p.toLowerCase();
-  for(const [k,v] of Object.entries(OD_MAP)) if(k.toLowerCase()===l) return v;
-  return '';
-}
-
-// ─── FILE UPLOAD (FileStack) ───
-const FILESTACK_KEY = 'free';
-
-window.uploadToCloudinary = async (input) => {
-  const file = input.files[0];
-  if (!file) return;
-  const status = document.getElementById('upload-status');
-  const field  = document.getElementById('t-attachment');
-  status.style.color = 'var(--text-muted)';
-  status.textContent = '⏳ جاري الرفع...';
-  const fd = new FormData();
-  fd.append('fileUpload', file);
-  try {
-    const res  = await fetch(`https://www.filestackapi.com/api/store/S3?key=free`, { method:'POST', body:fd });
-    const data = await res.json();
-    if (data.url) {
-      field.value = data.url;
-      status.style.color = 'var(--green)';
-      status.textContent = '✓ تم الرفع!';
-    } else {
-      throw new Error('Upload failed');
-    }
-  } catch(e) {
-    // fallback: استخدم tmpfiles.org
-    try {
-      const fd2 = new FormData();
-      fd2.append('file', file);
-      const res2 = await fetch('https://tmpfiles.org/api/v1/upload', { method:'POST', body:fd2 });
-      const data2 = await res2.json();
-      if (data2.data?.url) {
-        field.value = data2.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
-        status.style.color = 'var(--green)';
-        status.textContent = '✓ تم الرفع!';
-      } else { throw new Error('Both failed'); }
-    } catch(e2) {
-      status.style.color = 'var(--red)';
-      status.textContent = '✗ فشل الرفع';
-    }
-  }
-  input.value = '';
-};
-
-// ─── AUTH ───
-window.doLogin = async () => {
-  const email=document.getElementById('login-email').value.trim();
-  const pass=document.getElementById('login-pass').value;
-  document.getElementById('auth-err').textContent='';
-  try { await signInWithEmailAndPassword(auth,email,pass); }
-  catch(e){ document.getElementById('auth-err').textContent='Invalid email or password.'; }
-};
-window.doLogout = async () => { await signOut(auth); };
-
-onAuthStateChanged(auth, user => {
-  if(user){
-    currentUser=user; isAdmin=ADMINS.includes(user.email);
-    document.getElementById('auth-screen').style.display='none';
-    document.getElementById('app').style.display='block';
-    document.getElementById('role-badge').textContent=isAdmin?'Admin':'Viewer';
-    document.getElementById('role-badge').className='badge-role'+(isAdmin?' admin':'');
-    if(isAdmin){
-      document.getElementById('btn-add-eq').style.display='flex';
-      document.getElementById('actions-col').style.display='';
-    }
-    loadData();
-  } else {
-    currentUser=null;
-    document.getElementById('auth-screen').style.display='flex';
-    document.getElementById('app').style.display='none';
-  }
-});
-
-// ─── LOAD ───
-async function loadData(){
-  const [eqSnap,trSnap] = await Promise.all([
-    getDocs(query(collection(db,'equipment'),orderBy('sn','asc'))),
-    getDocs(query(collection(db,'transfers'),orderBy('timestamp','desc')))
-  ]);
-  allEquipment = eqSnap.docs.map(d=>({id:d.id,...d.data()}));
-  allTransfers = trSnap.docs.map(d=>({id:d.id,...d.data()}));
-  renderDashboard();
-  renderTable();
-  populateFilters();
-  renderTransfers();
-}
-
-// ─── DASHBOARD ───
-function getFiltered(){
-  return allEquipment.filter(e=>{
-    if(multiFilter.od && e.od!==multiFilter.od) return false;
-    if(multiFilter.cat && e.category!==multiFilter.cat) return false;
-    if(multiFilter.proj && e.project!==multiFilter.proj) return false;
-    return true;
-  });
-}
-
-function renderDashboard(){
-  const base = getFiltered();
-
-  // Category cards
-  const catCount={};
-  // always count from od+proj filtered (not cat)
-  const forCat = allEquipment.filter(e=>{
-    if(multiFilter.od && e.od!==multiFilter.od) return false;
-    if(multiFilter.proj && e.project!==multiFilter.proj) return false;
-    return true;
-  });
-  forCat.forEach(e=>{ if(e.category) catCount[e.category]=(catCount[e.category]||0)+1; });
-  document.getElementById('cat-cards').innerHTML = Object.entries(catCount).sort((a,b)=>b[1]-a[1]).map(([cat,cnt])=>`
-    <div class="dash-card${multiFilter.cat===cat?' active':''}" onclick="toggleCat('${cat.replace(/'/g,"\'")}')">
-      <div class="dash-card-val" style="color:${CAT_COLORS[cat]||'var(--accent)'}">${cnt}</div>
-      <div class="dash-card-label">${cat.replace(' Equipment','')}</div>
-      <div class="dash-card-sub">click to filter · ℹ breakdown</div>
-    </div>`).join('');
-
-  // Project list
-  const projCount={};
-  const forProj = allEquipment.filter(e=>{
-    if(multiFilter.od && e.od!==multiFilter.od) return false;
-    if(multiFilter.cat && e.category!==multiFilter.cat) return false;
-    return true;
-  });
-  forProj.forEach(e=>{ if(e.project) projCount[e.project]=(projCount[e.project]||0)+1; });
-  window._projData = Object.entries(projCount).sort((a,b)=>b[1]-a[1]);
-  renderProjList();
-
-  // OD buttons
-  const odCount={};
-  allEquipment.forEach(e=>{ if(e.od) odCount[e.od]=(odCount[e.od]||0)+1; });
-  document.getElementById('od-buttons').innerHTML =
-    `<button class="od-btn${!multiFilter.od?' active':''}" onclick="toggleOD(null)">All</button>`+
-    Object.entries(odCount).sort((a,b)=>b[1]-a[1]).map(([od,cnt])=>
-      `<button class="od-btn${multiFilter.od===od?' active':''}" onclick="toggleOD('${od.replace(/'/g,"\'")}')">
-        ${od} <span style="opacity:.5;font-size:10px">(${cnt})</span>
-      </button>`
-    ).join('');
-
-  // OD Chart
-  if(multiFilter.od){
-    const odData = allEquipment.filter(e=>e.od===multiFilter.od);
-    const total = odData.length;
-    const catBreak={};
-    odData.forEach(e=>{ if(e.category) catBreak[e.category]=(catBreak[e.category]||0)+1; });
-    const sorted = Object.entries(catBreak).sort((a,b)=>b[1]-a[1]);
-    const maxVal = sorted[0]?.[1]||1;
-    const COLORS = ['#f0a500','#58a6ff','#3fb950','#f85149','#bc8cff','#ff7b72','#79c0ff','#d2a8ff'];
-    document.getElementById('od-chart-title').textContent = multiFilter.od;
-    document.getElementById('od-chart-sub').textContent = 'Equipment breakdown by category';
-    document.getElementById('od-chart-total').textContent = base.length + (base.length!==total?` / ${total}`:'');
-    document.getElementById('od-chart-bars').innerHTML = sorted.map(([cat,cnt],i)=>{
-      const activeCnt = base.filter(e=>e.category===cat).length;
-      return `
-      <div style="margin-bottom:10px;cursor:pointer;" onclick="toggleCat('${cat.replace(/'/g,"\'")}')">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-          <span style="font-size:12px;color:${multiFilter.cat===cat?COLORS[i%COLORS.length]:'var(--text)'};font-weight:${multiFilter.cat===cat?700:400}">${cat.replace(' Equipment','')}</span>
-          <span style="font-size:12px;font-family:'JetBrains Mono',monospace;color:${COLORS[i%COLORS.length]}">${cnt} <span style="color:var(--text-muted);font-size:10px">(${Math.round(cnt/total*100)}%)</span></span>
-        </div>
-        <div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;">
-          <div style="height:100%;width:${Math.round(cnt/maxVal*100)}%;background:${COLORS[i%COLORS.length]};border-radius:4px;opacity:${multiFilter.cat&&multiFilter.cat!==cat?0.3:1};transition:all .4s ease;"></div>
-        </div>
-      </div>`;
-    }).join('');
-    document.getElementById('od-chart-wrap').style.display='block';
-  } else {
-    document.getElementById('od-chart-wrap').style.display='none';
-  }
-
-  // update filter chips
-  updateFilterChips();
-}
-
-window.toggleOD = (od) => {
-  multiFilter.od = od;
-  if(!od) multiFilter.cat = null; // reset cat when clearing OD
-  renderDashboard();
-  renderTable();
-};
-
-window.toggleCat = (cat) => {
-  multiFilter.cat = multiFilter.cat===cat ? null : cat;
-  renderDashboard();
-  renderTable();
-};
-
-window.selectOD = window.toggleOD;
-
-function updateFilterChips(){
-  const chips = [];
-  if(multiFilter.od) chips.push(`O.D: ${multiFilter.od}`);
-  if(multiFilter.cat) chips.push(`Cat: ${multiFilter.cat.replace(' Equipment','')}`);
-  if(multiFilter.proj) chips.push(`Project: ${multiFilter.proj}`);
-  const bar = document.getElementById('active-filter-bar');
-  const txt = document.getElementById('filter-bar-text');
-  if(chips.length){
-    bar.style.display='flex';
-    txt.textContent = chips.join('  ·  ');
-  } else {
-    bar.style.display='none';
-  }
-}
-// ─── PROJECT LIST ───
-function renderProjList(filter=''){
-  const data=(window._projData||[]).filter(([p])=>!filter||p.toLowerCase().includes(filter.toLowerCase()));
-  document.getElementById('proj-list').innerHTML = data.length ? data.map(([proj,cnt])=>`
-    <div class="proj-row${multiFilter.proj===proj?' active':''}" onclick="toggleProj('${proj.replace(/'/g,"\\'").replace(/\"/g,'&quot;')}')">
-      <div class="proj-row-left">
-        <div class="proj-dot"></div>
-        <div>
-          <div class="proj-name">${proj}</div>
-          <div class="proj-od">${getOd(proj)||''}</div>
-        </div>
-      </div>
-      <div class="proj-count">${cnt}</div>
-    </div>`).join('') : '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">No projects found</div>';
-}
-window.filterProjList = () => renderProjList(document.getElementById('proj-search-input')?.value||'');
-window.toggleProj = (proj) => {
-  multiFilter.proj = multiFilter.proj===proj ? null : proj;
-  renderDashboard();
-  renderTable();
-};
-
-// Filter from dashboard (legacy compat)
-window.applyFilter = (type, value, el) => {
-  if(type==='cat') multiFilter.cat = value;
-  else if(type==='proj') multiFilter.proj = value;
-  else if(type==='od') multiFilter.od = value;
-  renderDashboard();
-  renderTable();
-};
-
-window.clearAllFilters = () => {
-  multiFilter={od:null,cat:null,proj:null};
-  document.getElementById('active-filter-bar').style.display='none';
-  document.getElementById('search-input').value='';
-  document.getElementById('filter-cat').value='';
-  document.getElementById('filter-type').value='';
-  document.getElementById('filter-proj').value='';
-  renderDashboard();
-  renderProjList();
-  renderTable();
-};
-
-// ─── BREAKDOWN MODAL ───
-window.showBreakdown = (type, value) => {
-  let title='', sub='', items=[];
-  const subset = allEquipment.filter(e => type==='cat'?e.category===value:e.project===value);
-
-  if(type==='cat'){
-    title = value;
-    sub = `${subset.length} equipment total`;
-    // top equipment types
-    const typeCount={};
-    subset.forEach(e=>{ if(e.equipment) typeCount[e.equipment]=(typeCount[e.equipment]||0)+1; });
-    // top ODs
-    const odCount={};
-    subset.forEach(e=>{ if(e.od) odCount[e.od]=(odCount[e.od]||0)+1; });
-    const maxT=Math.max(...Object.values(typeCount),1);
-    const maxO=Math.max(...Object.values(odCount),1);
-    items = `
-      <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">Most Used Equipment Types</div>
-      ${Object.entries(typeCount).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v],i)=>`
-        <div class="breakdown-row">
-          <div class="breakdown-rank">${i+1}</div>
-          <div class="breakdown-name">${k}</div>
-          <div class="breakdown-track"><div class="breakdown-fill" style="width:${v/maxT*100}%;background:${CAT_COLORS[value]||'var(--accent)'}"></div></div>
-          <div class="breakdown-count">${v}</div>
-        </div>`).join('')}
-      <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 10px;">Equipment by O.D</div>
-      ${Object.entries(odCount).sort((a,b)=>b[1]-a[1]).map(([k,v],i)=>`
-        <div class="breakdown-row">
-          <div class="breakdown-rank">${i+1}</div>
-          <div class="breakdown-name">${k}</div>
-          <div class="breakdown-track"><div class="breakdown-fill" style="width:${v/maxO*100}%;background:var(--blue)"></div></div>
-          <div class="breakdown-count">${v}</div>
-        </div>`).join('')}`;
-  }
-
-  document.getElementById('bd-title').textContent=title;
-  document.getElementById('bd-sub').textContent=sub;
-  document.getElementById('bd-content').innerHTML=items;
-  document.getElementById('breakdown-modal').classList.add('open');
-};
-window.closeBreakdown = () => document.getElementById('breakdown-modal').classList.remove('open');
-
-// ─── FILTERS ───
-function populateFilters(){
-  const cats=[...new Set(allEquipment.map(e=>e.category).filter(Boolean))].sort();
-  const types=[...new Set(allEquipment.map(e=>e.equipment).filter(Boolean))].sort();
-  const projs=[...new Set(allEquipment.map(e=>e.project).filter(Boolean))].sort();
-  document.getElementById('filter-cat').innerHTML='<option value="">All Categories</option>'+cats.map(c=>`<option>${c}</option>`).join('');
-  document.getElementById('filter-type').innerHTML='<option value="">All Types</option>'+types.map(t=>`<option>${t}</option>`).join('');
-  document.getElementById('filter-proj').innerHTML='<option value="">All Projects</option>'+projs.map(p=>`<option>${p}</option>`).join('');
-}
-
-// ─── TABLE ───
-window.renderTable = () => {
-  const q=document.getElementById('search-input').value.toLowerCase();
-  const cat=document.getElementById('filter-cat').value;
-  const type=document.getElementById('filter-type').value;
-  const proj=document.getElementById('filter-proj').value;
-  let data=allEquipment.filter(e=>{
-    const mQ=!q||[e.equipment,e.brand,e.code,e.project,e.od,e.sap].some(v=>v&&String(v).toLowerCase().includes(q));
-    const mCat=!cat||e.category===cat;
-    const mType=!type||e.equipment===type;
-    const mProj=!proj||e.project===proj;
-    if(multiFilter.od && e.od!==multiFilter.od) return false;
-    if(multiFilter.cat && e.category!==multiFilter.cat) return false;
-    if(multiFilter.proj && e.project!==multiFilter.proj) return false;
-    return mQ&&mCat&&mType&&mProj;
-  });
-  document.getElementById('table-loading').style.display='none';
-  document.getElementById('table-empty').style.display=data.length?'none':'block';
-  document.getElementById('table-body').innerHTML=data.map((e,i)=>`
-    <tr>
-      <td style="color:var(--text-muted)">${e.sn||i+1}</td>
-      <td><span class="cat-badge">${e.category||''}</span></td>
-      <td>${e.equipment||''}</td>
-      <td>${e.brand||''}</td>
-      <td class="code-cell">${e.code||''}</td>
-      <td>${e.project||'—'}</td>
-      <td style="color:var(--text-muted);font-size:12px">${e.od||'—'}</td>
-      <td style="font-family:monospace;font-size:12px">${e.year||'—'}</td>
-      ${isAdmin?`<td><div class="action-btns">
-        <button class="btn-transfer" onclick="openTransferModal('${e.id}')">Transfer</button>
-        <button class="btn-edit" onclick="openEditModal('${e.id}')">Edit</button>
-        <button class="btn-del" onclick="deleteEquipment('${e.id}')">Delete</button>
-      </div></td>`:'<td></td>'}
-    </tr>`).join('');
-};
-
-// ─── ADD/EDIT ───
-window.openAddModal = () => {
-  editingId=null;
-  document.getElementById('modal-title').textContent='Add Equipment';
-  ['equipment','brand','code','sap','chassis','engine','enginesn','year','power','project','od','costcenter','value'].forEach(f=>{
-    const el=document.getElementById('f-'+f); if(el) el.value='';
-  });
-  document.getElementById('f-category').value='Earthmoving Equipment';
-  document.getElementById('eq-modal').classList.add('open');
-};
-
-window.openEditModal = (id) => {
-  const eq=allEquipment.find(e=>e.id===id); if(!eq) return;
-  editingId=id;
-  document.getElementById('modal-title').textContent='Edit Equipment';
-  document.getElementById('f-category').value=eq.category||'';
-  document.getElementById('f-equipment').value=eq.equipment||'';
-  document.getElementById('f-brand').value=eq.brand||'';
-  document.getElementById('f-code').value=eq.code||'';
-  document.getElementById('f-sap').value=eq.sap||'';
-  document.getElementById('f-chassis').value=eq.chassis||'';
-  document.getElementById('f-engine').value=eq.engine||'';
-  document.getElementById('f-enginesn').value=eq.enginesn||'';
-  document.getElementById('f-year').value=eq.year||'';
-  document.getElementById('f-power').value=eq.power||'';
-  document.getElementById('f-project').value=eq.project||'';
-  document.getElementById('f-od').value=eq.od||'';
-  document.getElementById('f-costcenter').value=eq.costcenter||'';
-  document.getElementById('f-value').value=eq.value||'';
-  document.getElementById('eq-modal').classList.add('open');
-};
-
-window.autoFillOd = () => {
-  const od=getOd(document.getElementById('f-project').value);
-  if(od) document.getElementById('f-od').value=od;
-};
-
-window.saveEquipment = async () => {
-  const project=document.getElementById('f-project').value.trim();
-  const data={
-    category:document.getElementById('f-category').value,
-    equipment:document.getElementById('f-equipment').value,
-    brand:document.getElementById('f-brand').value,
-    code:document.getElementById('f-code').value,
-    sap:document.getElementById('f-sap').value,
-    chassis:document.getElementById('f-chassis').value,
-    engine:document.getElementById('f-engine').value,
-    enginesn:document.getElementById('f-enginesn').value,
-    year:document.getElementById('f-year').value,
-    power:document.getElementById('f-power').value,
-    project, od:getOd(project)||document.getElementById('f-od').value,
-    costcenter:document.getElementById('f-costcenter').value,
-    value:document.getElementById('f-value').value,
-  };
-  try {
-    if(editingId){ await updateDoc(doc(db,'equipment',editingId),data); toast('Updated ✓','success'); }
-    else { data.sn=allEquipment.length+1; data.createdAt=serverTimestamp(); await addDoc(collection(db,'equipment'),data); toast('Added ✓','success'); }
-    closeModal('eq-modal'); await loadData();
-  } catch(e){ toast('Error: '+e.message,'error'); }
-};
-
-window.deleteEquipment = async (id) => {
-  if(!confirm('Delete this equipment?')) return;
-  try { await deleteDoc(doc(db,'equipment',id)); toast('Deleted ✓','success'); await loadData(); }
-  catch(e){ toast('Error','error'); }
-};
-
-// ─── TRANSFER ───
-window.openTransferModal = (id) => {
-  const eq=allEquipment.find(e=>e.id===id); if(!eq) return;
-  document.getElementById('t-eq-id').value=id;
-  document.getElementById('t-eq-name').value=`${eq.equipment} — ${eq.code}`;
-  document.getElementById('t-from').value=eq.project||'—';
-  document.getElementById('t-to').value='';
-  document.getElementById('t-od').value='';
-  document.getElementById('t-date').value=new Date().toISOString().split('T')[0];
-  document.getElementById('t-requested-by').value='';
-  document.getElementById('t-attachment').value='';
-  document.getElementById('t-notes').value='';
-  document.getElementById('transfer-modal').classList.add('open');
-};
-
-window.autoFillTransferOd = () => {
-  const od=getOd(document.getElementById('t-to').value);
-  document.getElementById('t-od').value=od||'(not in O.D table)';
-};
-
-window.saveTransfer = async () => {
-  const id=document.getElementById('t-eq-id').value;
-  const to=document.getElementById('t-to').value.trim();
-  const from=document.getElementById('t-from').value;
-  const date=document.getElementById('t-date').value;
-  const notes=document.getElementById('t-notes').value;
-  if(!to){toast('Enter destination project','error');return;}
-  const newOd=getOd(to);
-  try {
-    const eq=allEquipment.find(e=>e.id===id);
-    const requestedBy=document.getElementById('t-requested-by').value.trim();
-    const attachment=document.getElementById('t-attachment').value.trim();
-    await addDoc(collection(db,'transfers'),{
-      equipmentId:id, equipmentName:eq?.equipment||'', code:eq?.code||'',
-      from, to, date, notes, requestedBy, attachment,
-      timestamp:serverTimestamp(), by:currentUser.email
-    });
-    const upd={project:to}; if(newOd) upd.od=newOd;
-    await updateDoc(doc(db,'equipment',id),upd);
-    toast('Transfer recorded ✓','success');
-    closeModal('transfer-modal'); await loadData();
-  } catch(e){ toast('Error: '+e.message,'error'); }
-};
-
-// ─── TRANSFER LOG ───
-function renderTransfers(){
-  const search=document.getElementById('transfer-search')?.value?.toLowerCase()||'';
-  const filtered=search?allTransfers.filter(t=>
-    t.code?.toLowerCase().includes(search)||t.equipmentName?.toLowerCase().includes(search)
-  ):allTransfers;
-  document.getElementById('transfers-list').innerHTML=filtered.length?filtered.map(t=>`
-    <div class="transfer-item">
-      <div class="transfer-info">
-        <div><strong>${t.equipmentName||'—'}</strong> <span class="code-cell">${t.code||''}</span></div>
-        <div style="margin-top:6px">
-          <span style="color:var(--text-muted)">${t.from||'—'}</span>
-          <span class="transfer-arrow">→</span>
-          <span style="color:var(--green)">${t.to||'—'}</span>
-        </div>
-        ${t.notes?`<div style="color:var(--text-muted);font-size:12px;margin-top:4px">📝 ${t.notes}</div>`:''}
-        ${t.requestedBy?`<div style="font-size:12px;margin-top:4px;color:var(--blue)">👤 Requested By: ${t.requestedBy}</div>`:''}
-        ${t.attachment?`<div style="margin-top:4px"><a href="${t.attachment}" target="_blank" style="font-size:12px;color:var(--accent);text-decoration:none">📎 Open Attachment</a></div>`:''}
-        <div class="transfer-meta">${t.date||''} · by ${t.by||'—'}</div>
-      </div>
-      ${isAdmin?`<button class="btn-del" style="margin-left:16px;flex-shrink:0" onclick="deleteTransfer('${t.id}')">Delete</button>`:''}
-    </div>`).join(''):'<div class="empty">No transfers found.</div>';
-}
-window.filterTransfers = () => renderTransfers();
-
-window.deleteTransfer = async (id) => {
-  if(!confirm('Delete this transfer?')) return;
-  try {
-    await deleteDoc(doc(db,'transfers',id));
-    allTransfers=allTransfers.filter(t=>t.id!==id);
-    toast('Deleted ✓','success'); renderTransfers();
-  } catch(e){ toast('Error','error'); }
-};
-
-// ─── NAV ───
-window.showPage = (page,el) => {
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  document.getElementById('page-'+page).classList.add('active');
-  if(el) el.classList.add('active');
-};
-window.closeModal = (id) => document.getElementById(id).classList.remove('open');
-
-function toast(msg,type='success'){
-  const t=document.getElementById('toast');
-  t.textContent=msg; t.className='show '+type;
-  setTimeout(()=>t.className='',3000);
-}
-
-// Category cards — single click = filter, double click = breakdown
-document.getElementById('cat-cards').addEventListener('click', e=>{
-  const card=e.target.closest('.dash-card'); if(!card) return;
-  const cat=card.querySelector('.dash-card-label').textContent;
-  // find full category name
-  const full=Object.keys(CAT_COLORS).find(k=>k.replace(' Equipment','')===cat)||cat+' Equipment';
-  showBreakdown('cat', full);
-});
-
-document.querySelectorAll('.modal-overlay, .breakdown-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
-document.getElementById('login-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
-</script>
-</body>
-</html>
+:root{--bg:#0d1117;--s:#161b22;--s2:#1c2128;--s3:#21262d;--bd:#30363d;--ac:#f0a500;--tx:#e6edf3;--mu:#7d8590;--dim:#484f58;--gr:#3fb950;--rd:#f85149;--bl:#58a6ff;--pu:#bc8cff;--r:8px}
+*{box-sizing:border-box;margin:0;padding:0}body{background:var(--bg);color:var(--tx);font:14px Inter,Arial,sans-serif;min-height:100vh}
+.top{background:var(--s);border-bottom:1px solid var(--bd);height:56px;padding:0 24px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50}.logo{white-space:nowrap;font:700 10px 'JetBrains Mono',monospace;color:var(--ac);letter-spacing:2px}.ttl{font-weight:600;font-size:15px;flex:1}
+.mode{white-space:nowrap;font:600 10px 'JetBrains Mono';padding:3px 9px;border-radius:12px;border:1px solid var(--bd);color:var(--mu)}.mode.live{color:var(--gr);border-color:var(--gr)}.mode.loc{color:var(--ac);border-color:var(--ac)}
+.btn{background:var(--ac);color:#000;border:0;border-radius:var(--r);padding:8px 16px;font-weight:700;font-size:13px;cursor:pointer}.btn:disabled{opacity:.5}.sm{background:transparent;border:1px solid var(--bd);color:var(--mu);padding:6px 12px;border-radius:var(--r);cursor:pointer;font-size:12px}.sm:hover{color:var(--tx);border-color:var(--mu)}.sm.dg:hover{color:var(--rd);border-color:var(--rd)}
+.main{display:flex}.side{width:230px;min-height:calc(100vh - 56px);background:var(--s);border-right:1px solid var(--bd);padding:16px 10px;flex-shrink:0;position:sticky;top:56px;align-self:flex-start}
+.dv{display:flex;align-items:center;gap:8px;margin:14px 6px 6px}.dv span{font-size:10px;font-weight:700;color:var(--dim);letter-spacing:1.2px;text-transform:uppercase}.dv i{flex:1;height:1px;background:var(--bd)}
+.nav{width:100%;display:flex;align-items:center;gap:10px;background:none;border:0;color:var(--mu);padding:9px 12px;border-radius:var(--r);cursor:pointer;font:500 13px Inter;text-align:left;margin-bottom:2px}.nav:hover{background:var(--s3);color:var(--tx)}.nav.on{background:rgba(240,165,0,.12);color:var(--ac)}.nav.off{opacity:.4;cursor:default}.nav b{margin-left:auto;font:600 10px 'JetBrains Mono';background:var(--s3);color:var(--mu);padding:2px 7px;border-radius:10px}
+.pg{flex:1;padding:22px 26px;min-width:0}.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.bar h1{font-size:19px;flex:1;min-width:200px}.bar h1 small{display:block;color:var(--mu);font-size:11px;font-weight:400;margin-top:2px}
+select,input,textarea{background:var(--bg);border:1px solid var(--bd);color:var(--tx);padding:8px 10px;border-radius:var(--r);font:13px Inter;outline:none;max-width:100%}select:focus,input:focus{border-color:var(--ac)}input[type=file]{display:none}
+.card{background:var(--s);border:1px solid var(--bd);border-radius:12px;padding:16px 18px;margin-bottom:14px}.hd{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}.hd label{display:block;font-size:10px;font-weight:600;color:var(--mu);letter-spacing:.6px;text-transform:uppercase;margin-bottom:4px}.hd input,.hd select{width:100%}
+.chips{display:flex;gap:6px;flex-wrap:wrap}.chips button{border:1px solid var(--bd);background:var(--s);color:var(--mu);border-radius:16px;padding:5px 14px;cursor:pointer;font:12px Inter}.chips button.on{background:var(--ac);color:#000;border-color:var(--ac);font-weight:600}
+.tw{overflow-x:auto;border:1px solid var(--bd);border-radius:var(--r)}table{width:100%;border-collapse:collapse;background:var(--s);font-size:12.5px}th{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;padding:9px 8px;text-align:left;border-bottom:1px solid var(--bd);background:var(--s2);white-space:nowrap}td{padding:5px 8px;border-bottom:1px solid var(--s3);font-variant-numeric:tabular-nums}td.n,th.n{text-align:right}
+td input,td select{width:100%;padding:6px 8px}td input.q{width:90px;text-align:right}tr.t td{font-weight:700;background:var(--s2);color:var(--ac)}.x{background:none;border:0;color:var(--mu);cursor:pointer;font-size:16px}.x:hover{color:var(--rd)}
+.tg{padding:2px 9px;border-radius:10px;font-size:10.5px;font-weight:600}.Owned{background:rgba(63,185,80,.15);color:var(--gr)}.Rental{background:rgba(88,166,255,.15);color:var(--bl)}.Asset{background:rgba(188,140,255,.15);color:var(--pu)}.Overdue{background:rgba(248,81,73,.15);color:var(--rd)}.Upcoming{background:var(--s3);color:var(--mu)}.Partial{background:rgba(240,165,0,.15);color:var(--ac)}
+.kp{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:14px}.k{background:var(--s);border:1px solid var(--bd);border-top:3px solid var(--c,var(--ac));border-radius:var(--r);padding:10px 13px}.k label{font-size:10px;font-weight:600;color:var(--mu);text-transform:uppercase;letter-spacing:.5px}.k div{font:700 20px 'JetBrains Mono';color:var(--c,var(--ac));margin-top:2px}
+.tools{display:flex;gap:8px;align-items:center;margin:0 0 10px;flex-wrap:wrap}.tools input{min-width:240px}.mu{color:var(--mu)}.sub{font-size:11px;color:var(--mu)}.err{color:var(--rd)}.drop{border:2px dashed var(--bd);border-radius:12px;padding:40px 24px;text-align:center;background:var(--s);max-width:620px;margin:40px auto}.drop h2{margin-bottom:8px}.drop p{color:var(--mu);margin-bottom:16px;line-height:1.7}
+#acbox{position:fixed;z-index:90;background:var(--s2);border:1px solid var(--ac);border-radius:8px;max-height:300px;overflow:auto;box-shadow:0 8px 24px rgba(0,0,0,.5);display:none}.ai{padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--s3)}.ai:last-child{border:0}.ai.on,.ai:hover{background:rgba(240,165,0,.16)}.ai b{color:var(--ac);font-weight:600}.ai small{display:block;color:var(--mu);font-size:11.5px}.ai.none{color:var(--mu);cursor:default}
+#toast{position:fixed;bottom:20px;right:20px;background:var(--s3);border:1px solid var(--ac);padding:11px 18px;border-radius:var(--r);display:none;z-index:99;max-width:420px}#login{max-width:340px;margin:12vh auto;background:var(--s);border:1px solid var(--bd);border-radius:12px;padding:32px;text-align:center}#login input{width:100%;margin-bottom:10px}
+@media(max-width:800px){.hm{display:none!important}.top{padding:0 12px;gap:8px}.main{flex-direction:column}.side{display:flex;width:100%;min-height:0;overflow-x:auto;padding:8px 10px;gap:4px;top:56px;z-index:40;border-right:0;border-bottom:1px solid var(--bd)}.dv,.nav.off{display:none}.nav{width:auto;white-space:nowrap;flex-shrink:0;margin:0;padding:8px 12px}.pg{padding:14px}.bar h1{font-size:17px}.kp{grid-template-columns:1fr 1fr}}@media print{.top,.side,.tools,.btn,.sm{display:none!important}}
+</style></head><body>
+<!-- ===== Firebase: this app uses its OWN Firebase project (Formwork team only), separate from the equipment portal.
+     Project: hac-scaffolding. Open the page with ?demo to test locally without touching Firestore. ===== -->
+<script>const FIREBASE_CONFIG={apiKey:"AIzaSyD8EayLrIrHF2KYvJvPUvmPfgldr6HiDvE",authDomain:"hac-scaffolding.firebaseapp.com",projectId:"hac-scaffolding",storageBucket:"hac-scaffolding.firebasestorage.app",messagingSenderId:"328619940185",appId:"1:328619940185:web:c32ecc99d710f12453d448"};</script>
+<div class="top"><span class="logo">HAC · PMV</span><span class="ttl"><span class="hm">Formwork & Scaffolding &mdash; </span>PR Creator</span><span class="mode" id="mode">...</span></div>
+<div id="login" style="display:none"><div class="logo" style="margin-bottom:8px">HAC · PMV</div><h3 style="margin-bottom:16px">Sign in</h3><input id="em" placeholder="Email"><input id="pw" type="password" placeholder="Password"><button class="btn" style="width:100%" onclick="signIn()">Sign in</button><div class="err" id="le" style="margin-top:8px;min-height:18px"></div></div>
+<div class="main" id="app" style="display:none"><div class="side">
+<div class="dv"><span>Create</span><i></i></div>
+<button class="nav on" id="n-new" onclick="go('new')">&#10010; Service PR</button>
+<button class="nav" id="n-dr" onclick="go('dr')">&#8644; Delivery / Return</button>
+<button class="nav" id="n-trn" onclick="go('trn')">&#8594; Transfer Request</button>
+<button class="nav" id="n-po" onclick="go('po')">&#9633; Rental PO (Ext)</button>
+<button class="nav" id="n-pn" onclick="go('pn')">&#9776; Delivery Plan</button>
+<button class="nav" id="n-reg" onclick="go('reg')">&#9776; PR Register <b id="c-reg">0</b></button>
+<div class="dv"><span>Live sheets</span><i></i></div>
+<button class="nav" id="n-Owned" onclick="go('Owned')">&#9632; Owned <b id="c-Owned">0</b></button>
+<button class="nav" id="n-Asset" onclick="go('Asset')">&#9670; Assets <b id="c-Asset">0</b></button>
+<button class="nav" id="n-pl" onclick="go('pl')">&#128197; Plan Board <b id="c-pl">0</b></button>
+<button class="nav" id="n-mv" onclick="go('mv')">&#8645; Movements <b id="c-mv">0</b></button>
+<button class="nav" id="n-Rental" onclick="go('Rental')">&#9633; Rental <b id="c-Rental">0</b></button>
+<div class="dv"><span>Setup</span><i></i></div>
+<button class="nav" id="n-md" onclick="go('md')">&#9881; Master Data <b id="c-md">0</b></button>
+</div><div class="pg" id="pg"></div></div><div id="acbox"></div><div id="toast"></div><input id="fmd" type="file" accept=".xlsx,.xlsm"><datalist id="dl"></datalist><datalist id="pjl"></datalist>
+<script>
+const $=id=>document.getElementById(id),N=v=>Math.round(+v||0).toLocaleString('en-US'),N1=v=>(+v||0).toLocaleString('en-US',{maximumFractionDigits:1}),D=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'-',E=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),Q=s=>String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+const SRC=['Owned','Rental','Asset'],SL={Owned:'Owned',Rental:'Rental',Asset:'Assets'};
+const FORMS=['dr','trn','po','pn'];let MDT='items',PJ={},PS='All',MD={},PRS={},LN={},DOC={},DL={},G=blankDoc('dr'),CF=null,MT='All',PAGE='new',GROUP='All',F=blank(),FSRC='All',QS='',PSEL='All',MQ='';
+function blank(){return{id:null,no:'',date:new Date().toISOString().slice(0,10),project:'',group:'Slab',lines:[{}]}}
+/* ================= data layer: Firestore (live) or IndexedDB (local demo) ================= */
+const L={W:{},cache:{fs_master:{},fs_pr:{},fs_line:{},fs_doc:{},fs_dline:{},fs_project:{}},
+ watch(col,cb){this.W[col]=cb},emit(col){this.W[col]&&this.W[col](Object.values(this.cache[col]))}};
+let DB;
+async function initDB(){
+ if(FIREBASE_CONFIG&&typeof firebase!=='undefined'&&!/[?&]demo/.test(location.search)){firebase.initializeApp(FIREBASE_CONFIG);const fs=firebase.firestore(),au=firebase.auth();
+  $('mode').textContent='LIVE';$('mode').title='Firestore - shared, real-time';$('mode').className='mode live';
+  await new Promise(r=>au.onAuthStateChanged(u=>{if(u){$('login').style.display='none';r()}else{$('login').style.display='block';$('app').style.display='none'}}));
+  const fe=e=>{toast(e.code==='permission-denied'?'Permission denied - add the Firestore rules for the fs_* collections (see notes), or sign in with an allowed user':(e.message||String(e)));throw e};
+  DB={set:(c,id,o)=>fs.collection(c).doc(id).set(o).catch(fe),del:(c,id)=>fs.collection(c).doc(id).delete().catch(fe),
+   async batch(ops){try{for(let i=0;i<ops.length;i+=400){const b=fs.batch();ops.slice(i,i+400).forEach(([t,c,id,o])=>t==='s'?b.set(fs.collection(c).doc(id),o):b.delete(fs.collection(c).doc(id)));await b.commit()}}catch(e){fe(e)}},
+   start(){['fs_master','fs_pr','fs_line','fs_doc','fs_dline','fs_project'].forEach(c=>fs.collection(c).onSnapshot(s=>{L.cache[c]={};s.docs.forEach(d=>L.cache[c][d.id]={id:d.id,...d.data()});L.emit(c)},fe))}}}
+ else{$('mode').textContent='LOCAL DEMO';$('mode').title='Data stays on this browser only';$('mode').className='mode loc';
+  const db=await new Promise(r=>{try{const q=indexedDB.open('hac_pr_creator',1);q.onupgradeneeded=()=>q.result.createObjectStore('kv');q.onsuccess=()=>r(q.result);q.onerror=()=>r(null)}catch(e){r(null)}}),bc=window.BroadcastChannel?new BroadcastChannel('hac_pr'):null;
+  const st=(m,f)=>db?new Promise(r=>{const t=db.transaction('kv',m),x=f(t.objectStore('kv'));t.oncomplete=()=>r(x&&x.result)}):Promise.resolve(null);
+  const load=async()=>{for(const c of Object.keys(L.cache)){const o=await st('readonly',s=>s.get(c));L.cache[c]=o||{};L.emit(c)}},save=c=>{st('readwrite',s=>s.put(L.cache[c],c));bc&&bc.postMessage(c)};
+  if(bc)bc.onmessage=()=>load();
+  DB={set:async(c,id,o)=>{L.cache[c][id]={...o,id};save(c);L.emit(c)},del:async(c,id)=>{delete L.cache[c][id];save(c);L.emit(c)},
+   async batch(ops){const cs=new Set();ops.forEach(([t,c,id,o])=>{t==='s'?L.cache[c][id]={...o,id}:delete L.cache[c][id];cs.add(c)});cs.forEach(c=>{save(c);L.emit(c)})},start:load}}}
+async function signIn(){try{await firebase.auth().signInWithEmailAndPassword($('em').value,$('pw').value);$('le').textContent='';$('login').style.display='none';$('app').style.display='flex'}catch(e){$('le').textContent=e.message}}
+/* ================= type-ahead suggestions (items, projects, PR numbers) ================= */
+const NZ=s=>String(s||'').toLowerCase().replace(/[\u064B-\u0652\u0640]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه'),AC={el:null,rows:[],i:-1},ACO=o=>o==='F'?F:G;
+function acRows(el){const k=el.dataset.ac,q=NZ(el.value).trim();if(q.length<2)return[];const tk=q.split(/\s+/),hit=h=>tk.every(t=>h.includes(t)),rk=(a,b)=>(a.startsWith(q)?0:b.startsWith(q)?1:2+Math.min(a.indexOf(tk[0])<0?99:a.indexOf(tk[0]),99));
+ if(k==='item')return Object.values(MD).filter(m=>GROUP==='All'||m.group===GROUP).map(m=>({m,c:NZ(m.code),n:NZ(m.name),h:NZ(m.code+' '+m.name+' '+m.sap)})).filter(x=>hit(x.h)).sort((a,b)=>rk(a.c,a.n)-rk(b.c,b.n)||(a.c.startsWith(q)&&b.c.startsWith(q)?a.m.code.localeCompare(b.m.code):a.m.name.localeCompare(b.m.name))).slice(0,8).map(x=>({v:x.m.code+' — '+x.m.name,t:x.m.code,s:x.m.name+' · '+x.m.group}));
+ if(k==='pj')return[...Object.values(PJ).map(p=>({n:p.name,s:[p.od,p.plant].filter(Boolean).join(' · ')})),...(el.dataset.x?EXTRA.map(n=>({n,s:''})):[])].filter(x=>hit(NZ(x.n))).sort((a,b)=>rk(NZ(a.n),'')-rk(NZ(b.n),'')||a.n.localeCompare(b.n)).slice(0,8).map(x=>({v:x.n,t:x.n,s:x.s}));
+ return prNos().filter(n=>hit(NZ(n))).slice(0,8).map(n=>({v:n,t:n,s:''}))}
+function acShow(el){AC.el=el;AC.rows=acRows(el);AC.i=-1;const b=$('acbox'),r=el.getBoundingClientRect();if(!AC.rows.length){b.style.display=el.value.trim().length>=2?'block':'none';b.innerHTML='<div class="ai none">No match'+(el.dataset.ac==='pj'?' &mdash; add the project in Master Data &rsaquo; Projects':'')+'</div>'}
+ else{b.style.display='block';b.innerHTML=AC.rows.map((x,i)=>`<div class="ai" data-i="${i}"><b>${E(x.t)}</b>${x.s?'<small>'+E(x.s)+'</small>':''}</div>`).join('')}
+ const w=Math.max(r.width,280);b.style.width=w+'px';b.style.left=Math.max(4,Math.min(r.left,innerWidth-w-4))+'px';const below=innerHeight-r.bottom;b.style.top=(below>200||below>r.top?r.bottom+2:Math.max(4,r.top-Math.min(300,b.scrollHeight)-2))+'px'}
+function acHide(){$('acbox').style.display='none';AC.el=null}
+function acPick(i){const x=AC.rows[i],el=AC.el;if(!x||!el)return;el.value=x.v;const k=el.dataset.ac;acHide();if(k==='item')pickItem(+el.dataset.i,x.v);else{ACO(el.dataset.o)[el.dataset.key]=x.v;if(el.id==='hpr')pjInfo()}}
+document.addEventListener('input',e=>{if(e.target.dataset&&e.target.dataset.ac)acShow(e.target)});
+document.addEventListener('keydown',e=>{if(!AC.el||$('acbox').style.display==='none')return;const n=AC.rows.length;if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();AC.i=(AC.i+(e.key==='ArrowDown'?1:-1)+n)%n;[...$('acbox').children].forEach((c,i)=>c.classList.toggle('on',i===AC.i))}else if(e.key==='Enter'&&AC.i>=0){e.preventDefault();acPick(AC.i)}else if(e.key==='Escape')acHide()});
+document.addEventListener('pointerdown',e=>{const a=e.target.closest&&e.target.closest('.ai');if(a&&a.dataset.i!=null){e.preventDefault();acPick(+a.dataset.i)}else if(!(e.target.dataset&&e.target.dataset.ac))acHide()});
+document.addEventListener('scroll',acHide,true);
+/* ================= master data ================= */
+L.watch('fs_master',a=>{MD={};a.forEach(m=>MD[m.id]=m);$('c-md').textContent=a.length;dlist();refresh()});
+L.watch('fs_pr',a=>{PRS={};a.forEach(p=>PRS[p.id]=p);$('c-reg').textContent=a.length;refresh()});
+L.watch('fs_line',a=>{LN={};a.forEach(l=>LN[l.id]=l);SRC.forEach(s=>$('c-'+s).textContent=a.filter(l=>l.src===s).length);refresh()});
+L.watch('fs_doc',a=>{DOC={};a.forEach(d=>DOC[d.id]=d);cnt();refresh()});
+L.watch('fs_dline',a=>{DL={};a.forEach(l=>DL[l.id]=l);cnt();refresh()});
+L.watch('fs_project',a=>{PJ={};a.forEach(p=>PJ[p.id]=p);pjl();refresh()});
+const EXTRA=['HAC Store','Workshop'];function pjl(){const l=document.getElementById('pjl');if(l)l.innerHTML=[...Object.values(PJ).map(p=>p.name).sort(),...EXTRA].map(n=>`<option value="${E(n)}">`).join('')}
+const pjFind=n=>Object.values(PJ).find(p=>p.name.toLowerCase()===String(n||'').trim().toLowerCase()),placeOk=n=>pjFind(n)||EXTRA.some(x=>x.toLowerCase()===String(n||'').trim().toLowerCase());
+const OD_SEED={"Bab Masr":"Eng. Mostafa Morsi","El Bank El Araby":"Eng. Mostafa Morsi","Kayan":"Eng. Mostafa Morsi","Luxor":"Eng. Mostafa Morsi","Mansoura 2":"Eng. Mostafa Morsi","R05":"Eng. Mostafa Morsi","SCB":"Eng. Mostafa Morsi","Al Shohadaa Central hospital":"Eng. Tamer Hagag","Alamein Station":"Eng. Tamer Hagag","Haptowen":"Eng. Tamer Hagag","Locanda":"Eng. Tamer Hagag","Naser Institute":"Eng. Tamer Hagag","Silver Sand":"Eng. Tamer Hagag","Sofitel Hotel":"Eng. Tamer Hagag","Soul":"Eng. Tamer Hagag","swan Lake - 2":"Eng. Tamer Hagag","Wadi Natroun":"Eng. Tamer Hagag","Abou Oweikal":"Eng. Ahmed Nezar","Abou Qir JV":"Eng. Ahmed Nezar","Alex Tram":"Eng. Ahmed Nezar","El Ayaat Project":"Eng. Ahmed Nezar","intake mostakbal Misr":"Eng. Ahmed Nezar","Metro Line 4":"Eng. Ahmed Nezar","Mostakbal Masr Zone (G)":"Eng. Ahmed Nezar","Safaga Port":"Eng. Ahmed Nezar","Sokhna Port":"Eng. Ahmed Nezar","TBM - Metro L4":"Eng. Ahmed Nezar","Toshka":"Eng. Ahmed Nezar","Benban 200 MW":"Eng. Hany Fayd","El Dabaa":"Eng. Hany Fayd","marasy":"Eng. Essam Ibrahim","Ras Elhekma":"Eng. Waled Fahmy","Allam Block ( 10th of ramadan )":"Eng. Mohamed Mostafa","Allam Block ( Safaga Port )":"Eng. Mohamed Mostafa","hassan allam complex":"Eng. Mohamed Mostafa","Heavy Transportation Workshop":"Eng. Mohamed Mostafa","Scaffolding":"Eng. Mohamed Mostafa","Ware House( 10th of ramadan )":"Eng. Mohamed Mostafa","10th OF RAMADAN":"Eng. Mohamed Mostafa","Sant Catreen":"Eng. Abdelaziz Ibrahim","Cairo Festival":"Eng. Hamdy Swillam","Hard 350":"Eng. Hamdy Swillam","Mansoura 1":"Eng. Hamdy Swillam","Mavida Garden":"Eng. Hamdy Swillam","Allam steel":"Eng. Salah Shaker","New Capital Tran-Hub":"Eng. Tamer Hagag","Afrexim Bank":"Eng. Islam El Sayed","Al Alamen Towers JV":"Eng. Mohamed Abdellatif","Mac Factory":"Eng. Tamer Hagag","U - Section Alex":"Eng. Ahmed Nezar","Head office":"Eng. Mohamed Mostafa","New Delta Phase 2":"Eng. Ahmed Nezar","Ramsis Post":"Eng. Tamer Hagag","Speed train depots Minya":"Eng. Ahmed Nezar"};
+const tc=n=>String(n||'').replace(/\s+/g,' ').trim().toLowerCase().replace(/(^|[\s(\-\/])([a-z])/g,(m,a,b)=>a+b.toUpperCase());
+const pid=n=>n.toUpperCase().replace(/[\/\s]+/g,'-');
+async function addProjects(){const t=$('pjt').value,ops=[];let bad=0;const cur={};Object.values(PJ).forEach(p=>cur[p.name.toLowerCase()]=p);
+ t.split(/\n/).forEach(row=>{const c=row.split('\t').map(x=>x.replace(/\s+/g,' ').trim()),n=tc(c[0]);if(!n)return;if(/[\u0600-\u06FF]/.test(row)){bad++;return}
+  const ex=cur[n.toLowerCase()],o={name:n,od:c[1]||(ex&&ex.od)||'',plant:c[2]||(ex&&ex.plant)||'',pcode:c[3]||(ex&&ex.pcode)||'',sap:c[4]||(ex&&ex.sap)||''};
+  if(ex&&ex.name===o.name&&ex.od===o.od&&ex.plant===o.plant&&ex.pcode===o.pcode&&ex.sap===o.sap)return;cur[n.toLowerCase()]=o;ops.push(['s','fs_project',ex?ex.id:pid(n),o])});
+ if(ops.length)await DB.batch(ops);$('pjt').value='';toast(ops.length+' saved'+(bad?' | '+bad+' skipped: Arabic names - use the English name':''))}
+async function seedProjects(){const cur={};Object.values(PJ).forEach(p=>cur[p.name.toLowerCase()]=p);const ops=[];Object.entries(OD_SEED).forEach(([n0,od])=>{const n=tc(n0),ex=cur[n.toLowerCase()];if(ex&&ex.od&&ex.name===n)return;ops.push(['s','fs_project',ex?ex.id:pid(n),{...(ex||{plant:'',pcode:'',sap:''}),name:n,od:(ex&&ex.od)||od}])});if(!ops.length)return toast('All portal projects are already in the list');await DB.batch(ops);toast(ops.length+' projects loaded with their OD')}
+async function fixNames(){const ops=Object.values(PJ).filter(p=>p.name!==tc(p.name)).map(p=>['s','fs_project',p.id,{...p,name:tc(p.name)}]);if(!ops.length)return toast('All names already in the right format');await DB.batch(ops);toast(ops.length+' names fixed')}
+async function setPj(id,k,v){await DB.set('fs_project',id,{...PJ[id],[k]:v.trim()})}
+function pjInfo(){const e=$('pjinfo');if(!e)return;const p=pjFind(F.project);e.innerHTML=p?`OD <b>${E(p.od||'-')}</b> &middot; Plant <b>${E(p.plant||'-')}</b> &middot; Code <b>${E(p.pcode||'-')}</b> &middot; Project SAP <b>${E(p.sap||'-')}</b> <span class="mu">(filled automatically)</span>`:''}
+async function delProject(id){if(!confirm('Remove '+PJ[id].name+' from the list? Existing PRs keep their project name.'))return;await DB.del('fs_project',id)}
+function cnt(){const ls=Object.values(DL);$('c-mv').textContent=ls.filter(l=>(DOC[l.doc]||{}).type&&DOC[l.doc].type!=='plan').length;$('c-pl').textContent=ls.filter(l=>(DOC[l.doc]||{}).type==='plan').length}
+function refresh(){if(['new','reg','mv','pl','Owned','Asset','Rental','md'].includes(PAGE)&&!document.activeElement.matches('input,select'))draw()}
+const groups=()=>[...new Set(Object.values(MD).map(m=>m.group))].sort();
+function dlist(){$('dl').innerHTML=Object.values(MD).filter(m=>GROUP==='All'||m.group===GROUP).sort((a,b)=>a.name.localeCompare(b.name)).map(m=>`<option value="${E(m.id)} — ${E(m.name)}">`).join('')}
+function importMD(file){const rd=new FileReader();rd.onload=async e=>{try{const wb=XLSX.read(e.target.result,{type:'array'}),A=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:null}),H=A[0].map(h=>String(h||'').toLowerCase()),f=(...n)=>H.findIndex(h=>n.some(x=>h.includes(x)));
+ const c=f('item code','code'),s=f('sap'),n=f('item name','name','descr'),g=f('group','categ'),d=f('source'),w=f('weight'),i=f('internal'),x=f('external'),p=f('purchase','replacement');if(c<0||n<0)throw Error('Need columns: Item Code, Item Name');
+ const ops=[],seen=new Set();A.slice(1).forEach(r=>{if(!r[c])return;const id=String(r[c]).trim().toUpperCase().replace(/\//g,'-');if(seen.has(id))return;seen.add(id);ops.push(['s','fs_master',id,{code:id,sap:r[s]||'',name:String(r[n]||''),group:r[g]||'Other',src:SRC.includes(r[d])?r[d]:'Owned',weight:+r[w]||0,rent:+r[i]||0,ext:+r[x]||0,price:+r[p]||0}])});
+ await DB.batch(ops);toast(ops.length+' items imported into Master Data')}catch(x){toast('Import failed: '+x.message)}};rd.readAsArrayBuffer(file)}
+$('fmd').onchange=e=>{if(e.target.files[0])importMD(e.target.files[0]);e.target.value=''};
+/* ================= Service PR form ================= */
+function pickItem(i,v){const code=(v.split(' — ')[0]||'').trim().toUpperCase(),m=MD[code]||Object.values(MD).find(x=>x.name.toLowerCase()===v.trim().toLowerCase());const l=CF.lines[i];
+ if(m){l.code=m.code;if(CF===F){l.src=l.src||m.src;$('r'+i).querySelector('select').value=l.src}rowUp(i)}else{l.code='';rowUp(i)}}
+function rowUp(i){const l=CF.lines[i],m=MD[l.code]||{},q=+l.qty||0,r=$('r'+i);if(!r)return;r.querySelector('.cd').textContent=l.code||'-';r.querySelector('.ds').textContent=m.name||'';r.querySelector('.wt').textContent=m.weight?N1(m.weight*q):'-';r.querySelector('.vl').textContent=m.price?N(m.price*q):'-';tot()}
+function tot(){let q=0,w=0,v=0,by={Owned:0,Rental:0,Asset:0};CF.lines.forEach(l=>{const m=MD[l.code]||{},n=+l.qty||0;if(l.code){q+=n;w+=n*(m.weight||0);v+=n*(m.price||0);by[l.src||'Owned']++}});
+ $('tt').innerHTML=(CF===F?`<span class="tg Owned">${by.Owned} Owned</span> <span class="tg Rental">${by.Rental} Rental</span> <span class="tg Asset">${by.Asset} Assets</span> &nbsp; `:'')+`<b style="color:var(--ac)">Qty ${N(q)}</b> &middot; ${N1(w/1000)} t &middot; ${N(v)} EGP`}
+function lines(){const isF=CF===F;$('lb').innerHTML=CF.lines.map((l,i)=>`<tr id="r${i}"><td class="mu">${i+1}</td><td style="min-width:min(260px,46vw)"><input data-ac="item" data-i="${i}" autocomplete="off" placeholder="Type 2 letters: name or code..." value="${l.code?E(l.code+' — '+(MD[l.code]||{}).name):''}" onchange="pickItem(${i},this.value)"></td><td class="cd mu hm">${l.code||'-'}</td><td class="ds mu hm"></td>
+ ${isF?`<td><select onchange="F.lines[${i}].src=this.value;tot()">${SRC.map(s=>`<option value="${s}" ${(l.src||'Owned')===s?'selected':''}>${SL[s]}</option>`).join('')}</select></td>`:''}<td class="n"><input class="q" type="number" min="0" value="${l.qty||''}" oninput="CF.lines[${i}].qty=this.value;rowUp(${i})"></td><td class="n wt hm">-</td><td class="n vl hm">-</td><td><button class="x" onclick="CF.lines.splice(${i},1);if(!CF.lines.length)CF.lines=[{}];lines()">&times;</button></td></tr>`).join('');CF.lines.forEach((l,i)=>rowUp(i))}
+function newPR(){const gs=['All',...CGROUPS()];return`<div class="bar"><h1>${F.id?'Edit PR '+E(F.no):'New Service PR'}<small>One PR &rarr; lines are routed to the Owned / Assets / Rental sheets by each line's source</small></h1>${F.id?'<button class="sm" onclick="F=blank();draw()">Cancel edit</button>':''}</div>
+ ${Object.keys(MD).length?'':'<div class="card err">Master Data is empty. <button class="btn" style="margin:6px 0 0" onclick="fmd.click()">Import Master_Data_Formwork.xlsx</button></div>'}
+ <div class="card"><div class="hd"><div><label>PR No (SAP)</label><input id="hno" value="${E(F.no)}" oninput="F.no=this.value" placeholder="70030000"></div><div><label>Date</label><input id="hdt" type="date" value="${F.date}" oninput="F.date=this.value"></div><div><label>Project</label><input id="hpr" data-ac="pj" data-o="F" data-key="project" autocomplete="off" value="${E(F.project)}" oninput="F.project=this.value;pjInfo()" placeholder="Type 2 letters, e.g. MI"></div>
+ <div><label>PR group</label><select onchange="F.group=this.value">${CGROUPS().map(g=>`<option ${g===F.group?'selected':''}>${g}</option>`).join('')}</select></div></div><div class="sub" id="pjinfo" style="margin-top:10px"></div></div>
+ <div class="tools"><span class="sub">Item list shows:</span><div class="chips">${gs.map(g=>`<button class="${g===GROUP?'on':''}" onclick="GROUP='${Q(g)}';dlist();draw()">${E(g)}</button>`).join('')}</div></div>
+ <div class="tw"><table><tr><th>SR</th><th>Item (name or code)</th><th class="hm">Code</th><th class="hm">Description</th><th>Source</th><th class="n">Qty</th><th class="n hm">Weight kg</th><th class="n hm">Value EGP</th><th></th></tr><tbody id="lb"></tbody></table></div><div id="tt" class="card" style="margin-top:10px"></div>
+ <div class="tools" style="margin-top:12px"><button class="sm" onclick="CF.lines.push({});lines()">+ Add line</button><span style="flex:1"></span><button class="btn" onclick="savePR()">${F.id?'Save changes':'Save PR'}</button></div>`}
+function blankDoc(p){return{page:p,type:p==='dr'?'dlv':p==='trn'?'trn':p==='pn'?'plan':'po',party:'HAC',no:'',date:new Date().toISOString().slice(0,10),from:'',to:'',ref:'',vendor:'',lines:[{}]}}
+const TY={dlv:'Delivery',ret:'Return',trn:'Transfer',po:'Rental PO',plan:'Delivery Plan'},PFX={dlv:'DLV',ret:'RET',trn:'TRF',po:'PO',plan:'PLN'};
+const prNos=()=>Object.values(PRS).map(p=>p.no).sort();
+function docForm(){const p=G.page,T={dr:'Delivery / Return',trn:'Transfer Request',po:'Rental PO (External)',pn:'Delivery Plan'}[p],ch=(arr,cur,fn)=>`<div class="chips">${arr.map(x=>`<button class="${x[0]===cur?'on':''}" onclick="${fn}='${x[0]}';draw()">${x[1]}</button>`).join('')}</div>`;
+ const f=(l,k,ph,ex)=>`<div><label>${l}</label><input ${ex||''} data-o="G" data-key="${k}" autocomplete="off" value="${E(G[k])}" oninput="G.${k}=this.value" placeholder="${ph||''}"></div>`;
+ return`<div class="bar"><h1>${T}<small>${p==='pn'?'Plan what will be delivered and when &mdash; load the PR\'s open shortage, trim quantities, set the date. The Plan Board tracks it against real deliveries':p==='po'?'External rental order against a PR &mdash; load the PR\'s Rental lines, then add the SAP PO number and vendor':'Select items from Master Data &mdash; saved documents appear in the live Movements sheet'}</small></h1></div>
+ ${Object.keys(MD).length?'':'<div class="card err">Master Data is empty. <button class="btn" style="margin:6px 0 0" onclick="fmd.click()">Import Master_Data_Formwork.xlsx</button></div>'}
+ <div class="card">${p==='dr'?`<div class="tools">${ch([['dlv','Delivery'],['ret','Return']],G.type,'G.type')}</div>`:''}${p!=='po'&&p!=='pn'?`<div class="tools"><span class="sub">Party</span>${ch([['HAC','HAC'],['Ext','External']],G.party,'G.party')}</div>`:''}
+ <div class="hd">${p==='po'||p==='pn'?`<div><label>PR No</label><input data-ac="pr" data-o="G" data-key="ref" autocomplete="off" value="${E(G.ref)}" oninput="G.ref=this.value" placeholder="Type 2 digits of the PR no"><datalist id="prl">${prNos().map(n=>`<option value="${E(n)}">`).join('')}</datalist></div>${p==='po'?f('SAP PO No','no','94000...')+f('Vendor','vendor','Vendor name'):f('Store (deliver from)','from','Store','data-ac="pj" data-x="1"')+f('Deliver to','to','Project','data-ac="pj" data-x="1"')+f('Plan No','no','auto: PLN-0001')}`:`${f('Document No','no','auto: '+PFX[G.type]+'-'+String(Object.values(DOC).filter(d=>d.type===G.type).length+1).padStart(4,'0'))}${f('From','from','Project or store','data-ac="pj" data-x="1"')}${f('To','to','Project or store','data-ac="pj" data-x="1"')}${f('PR / PO ref (optional)','ref','links to the PR status')}`}
+ <div><label>${p==='pn'?'Planned delivery date':'Date'}</label><input type="date" value="${G.date}" oninput="G.date=this.value"></div></div>
+ ${p==='po'?`<div class="tools" style="margin:12px 0 0"><button class="sm" onclick="loadPO()">Load Rental lines from this PR</button></div>`:p==='pn'?`<div class="tools" style="margin:12px 0 0"><button class="sm" onclick="loadPlan()">Load open shortage from this PR</button></div>`:''}</div>
+ <div class="tools"><span class="sub">Item list shows:</span><div class="chips">${['All',...CGROUPS()].map(g=>`<button class="${g===GROUP?'on':''}" onclick="GROUP='${Q(g)}';dlist();draw()">${E(g)}</button>`).join('')}</div></div>
+ <div class="tw"><table><tr><th>SR</th><th>Item (name or code)</th><th class="hm">Code</th><th class="hm">Description</th><th class="n">Qty</th><th class="n hm">Weight kg</th><th class="n hm">Value EGP</th><th></th></tr><tbody id="lb"></tbody></table></div><div id="tt" class="card" style="margin-top:10px"></div>
+ <div class="tools" style="margin-top:12px"><button class="sm" onclick="CF.lines.push({});lines()">+ Add line</button><span style="flex:1"></span><button class="btn" onclick="saveDoc()">Save ${p==='po'?'PO':p==='pn'?'Plan':TY[G.type]}</button></div>`}
+function loadPO(){const pr=Object.values(PRS).find(p=>p.no===G.ref.trim());if(!pr)return toast('Pick an existing PR number first');const ls=Object.values(LN).filter(l=>l.pr===pr.id&&l.src==='Rental').sort((a,b)=>a.sr-b.sr);if(!ls.length)return toast('That PR has no Rental lines');G.lines=ls.map(l=>({code:l.code,qty:l.qty}));toast(ls.length+' Rental lines loaded');draw()}
+function loadPlan(){const pr=Object.values(PRS).find(p=>p.no===G.ref.trim());if(!pr)return toast('Pick an existing PR number first');const req={},dv={};Object.values(LN).filter(l=>l.pr===pr.id).forEach(l=>req[l.code]=(req[l.code]||0)+l.qty);Object.values(DL).forEach(l=>{const d=DOC[l.doc];if(d&&d.type==='dlv'&&d.ref===pr.no)dv[l.code]=(dv[l.code]||0)+l.qty});const ls=Object.keys(req).map(c=>({code:c,qty:Math.max(0,req[c]-(dv[c]||0))})).filter(l=>l.qty>0);if(!ls.length)return toast('Nothing outstanding on that PR');G.lines=ls;toast(ls.length+' open lines loaded');draw()}
+async function saveDoc(){const ls=G.lines.filter(l=>l.code&&+l.qty>0);if(!ls.length)return toast('Add at least one item with qty');if(G.type==='po'&&!G.no.trim())return toast('Enter the SAP PO number');if(G.type==='plan'&&!G.ref.trim())return toast('Enter the PR number the plan is for');if(G.type==='trn'){if(!placeOk(G.from)||!placeOk(G.to))return toast('Transfer From / To must be projects from the list (or HAC Store / Workshop)');G.from=(pjFind(G.from)||{name:EXTRA.find(x=>x.toLowerCase()===G.from.trim().toLowerCase())}).name;G.to=(pjFind(G.to)||{name:EXTRA.find(x=>x.toLowerCase()===G.to.trim().toLowerCase())}).name}
+ const no=G.no.trim()||PFX[G.type]+'-'+String(Object.values(DOC).filter(d=>d.type===G.type).length+1).padStart(4,'0'),id=(G.type+'_'+no).replace(/[\/\s]/g,'-');if(DOC[id]&&!confirm(TY[G.type]+' '+no+' exists. Replace it?'))return;
+ const ops=Object.values(DL).filter(l=>l.doc===id).map(l=>['d','fs_dline',l.id]),u=(window.firebase&&firebase.apps.length&&firebase.auth().currentUser)?firebase.auth().currentUser.email:'local';
+ ls.forEach((l,i)=>{const m=MD[l.code];ops.push(['s','fs_dline',id+'_'+(i+1),{doc:id,sr:i+1,code:m.code,sap:m.sap,name:m.name,qty:+l.qty,weight:m.weight||0,price:m.price||0}])});
+ ops.push(['s','fs_doc',id,{type:G.type,party:G.party,no,date:G.date,from:G.from,to:G.to,ref:G.ref.trim(),vendor:G.vendor,n:ls.length,by:u,at:Date.now()}]);await DB.batch(ops);toast(TY[G.type]+' '+no+' saved ('+ls.length+' lines)');G=blankDoc(G.page);draw()}
+function mv(){const rows=Object.values(DL).map(l=>({...l,d:DOC[l.doc]||{}})).filter(l=>l.d.type&&l.d.type!=='plan'&&(MT==='All'||l.d.type===MT)&&(!QS||(l.d.no+l.d.ref+l.code+l.name+l.d.from+l.d.to+(l.d.vendor||'')).toLowerCase().includes(QS.toLowerCase()))).sort((a,b)=>(b.d.date||'').localeCompare(a.d.date||'')||a.d.no.localeCompare(b.d.no)||a.sr-b.sr);window.__mv=rows;
+ const q=rows.reduce((a,l)=>a+l.qty,0),w=rows.reduce((a,l)=>a+l.qty*l.weight,0);
+ return`<div class="bar"><h1>Movements<small>Deliveries, returns, transfers and rental POs &mdash; live</small></h1><button class="sm" onclick="xm()">Export Excel</button></div>
+ <div class="tools"><div class="chips">${[['All','All'],['dlv','Delivery'],['ret','Return'],['trn','Transfer'],['po','Rental PO']].map(x=>`<button class="${x[0]===MT?'on':''}" onclick="MT='${x[0]}';draw()">${x[1]}</button>`).join('')}</div><input placeholder="Search doc / PR / item / vendor..." value="${E(QS)}" oninput="QS=this.value;clearTimeout(window.__t);window.__t=setTimeout(()=>{draw();const i=document.querySelector('.tools input');i.focus();i.setSelectionRange(99,99)},250)"></div>
+ <div class="tw"><table><tr><th>Date</th><th>Document</th><th>Type</th><th>Party</th><th>From</th><th>To</th><th>PR / PO</th><th>Vendor</th><th>Code</th><th>Description</th><th class="n">Qty</th><th class="n">Weight kg</th><th></th></tr>`+
+ rows.slice(0,600).map(l=>`<tr><td>${D(l.d.date)}</td><td><b>${E(l.d.no)}</b></td><td><span class="tg ${l.d.type==='po'?'Rental':l.d.type==='ret'?'Asset':'Owned'}">${TY[l.d.type]}</span></td><td class="mu">${l.d.type==='po'?'-':E(l.d.party)}</td><td>${E(l.d.from)}</td><td>${E(l.d.to)}</td><td>${E(l.d.ref)}</td><td>${E(l.d.vendor)}</td><td>${E(l.code)}</td><td>${E(l.name)}</td><td class="n"><b>${N(l.qty)}</b></td><td class="n">${l.weight?N1(l.qty*l.weight):'-'}</td><td><button class="x" title="Delete document" onclick="delDoc('${Q(l.doc)}')">&times;</button></td></tr>`).join('')+`<tr class="t"><td colspan="10">Total (${rows.length} lines)</td><td class="n">${N(q)}</td><td class="n">${N1(w)}</td><td></td></tr></table></div>`}
+function plan(){const today=new Date().toISOString().slice(0,10),in7=new Date(Date.now()+7*864e5).toISOString().slice(0,10),dv={};
+ Object.values(DL).forEach(l=>{const d=DOC[l.doc];if(d&&d.type==='dlv'){const k=d.ref+'|'+l.code;dv[k]=(dv[k]||0)+l.qty}});
+ const all=Object.values(DL).map(l=>({...l,d:DOC[l.doc]||{}})).filter(l=>l.d.type==='plan').sort((a,b)=>(a.d.date||'').localeCompare(b.d.date||'')||a.d.no.localeCompare(b.d.no)||a.sr-b.sr),rem={};
+ all.forEach(l=>{const k=l.d.ref+'|'+l.code;if(rem[k]==null)rem[k]=dv[k]||0;const c=Math.min(l.qty,rem[k]);rem[k]-=c;l.cov=c;l.st=c>=l.qty?'Delivered':l.d.date<today?'Overdue':c>0?'Partial':'Upcoming'});
+ const q=PS==='All'?'':'',rows=all.filter(l=>(PS==='All'||l.st===PS)&&(!QS||(l.d.no+l.d.ref+l.code+l.name+l.d.from+l.d.to).toLowerCase().includes(QS.toLowerCase())));window.__pl=rows;
+ const pq=all.reduce((a,l)=>a+l.qty,0),cq=all.reduce((a,l)=>a+l.cov,0),od=all.filter(l=>l.st==='Overdue').length,due=all.filter(l=>l.st!=='Delivered'&&l.d.date>=today&&l.d.date<=in7).length,k=(l,v,c)=>`<div class="k" style="--c:${c}"><label>${l}</label><div>${v}</div></div>`;
+ return`<div class="bar"><h1>Plan Board<small>Planned deliveries vs what was really delivered (matched by PR no + item, earliest plan first) &mdash; live</small></h1><button class="btn" onclick="go('pn')">+ New plan</button> <button class="sm" onclick="xpl()">Export Excel</button></div>
+ <div class="kp">${k('Plan lines',all.length,'var(--ac)')}${k('Planned qty',N(pq),'var(--bl)')}${k('Covered by deliveries',pq?Math.round(cq/pq*100)+'%':'-','var(--gr)')}${k('Overdue lines',od,'var(--rd)')}${k('Due in 7 days',due,'var(--pu)')}</div>
+ <div class="tools"><div class="chips">${['All','Overdue','Upcoming','Partial','Delivered'].map(x=>`<button class="${x===PS?'on':''}" onclick="PS='${x}';draw()">${x}</button>`).join('')}</div><input placeholder="Search plan / PR / item / store..." value="${E(QS)}" oninput="QS=this.value;clearTimeout(window.__t);window.__t=setTimeout(()=>{draw();const i=document.querySelector('.tools input');i.focus();i.setSelectionRange(99,99)},250)"></div>
+ <div class="tw"><table><tr><th>Planned date</th><th>Plan</th><th>PR</th><th>Store</th><th>To</th><th>Code</th><th>Description</th><th class="n">Planned</th><th class="n">Delivered</th><th class="n">Gap</th><th>Status</th><th></th></tr>`+
+ rows.slice(0,600).map(l=>`<tr><td>${D(l.d.date)}</td><td><b>${E(l.d.no)}</b></td><td>${E(l.d.ref)}</td><td>${E(l.d.from)}</td><td>${E(l.d.to)}</td><td>${E(l.code)}</td><td>${E(l.name)}</td><td class="n"><b>${N(l.qty)}</b></td><td class="n">${N(l.cov)}</td><td class="n ${l.qty>l.cov?'err':''}">${N(l.qty-l.cov)}</td><td><span class="tg ${l.st==='Delivered'?'Owned':l.st}">${l.st}</span></td><td><button class="x" title="Delete plan" onclick="delDoc('${Q(l.doc)}')">&times;</button></td></tr>`).join('')+'</table></div>'}
+function xpl(){const r=window.__pl.map(l=>({'Planned date':l.d.date,Plan:l.d.no,PR:l.d.ref,Store:l.d.from,To:l.d.to,'Item Code':l.code,Description:l.name,Planned:l.qty,Delivered:l.cov,Gap:l.qty-l.cov,Status:l.st})),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(r),'Delivery Plan');XLSX.writeFile(wb,'Formwork_Delivery_Plan_'+new Date().toISOString().slice(0,10)+'.xlsx')}
+async function delDoc(id){const d=DOC[id];if(!confirm('Delete '+TY[d.type]+' '+d.no+' (all its lines)?'))return;await DB.batch([...Object.values(DL).filter(l=>l.doc===id).map(l=>['d','fs_dline',l.id]),['d','fs_doc',id]]);toast('Document deleted')}
+function xm(){const r=window.__mv.map(l=>({Date:l.d.date,Document:l.d.no,Type:TY[l.d.type],Party:l.d.party,From:l.d.from,To:l.d.to,'PR/PO':l.d.ref,Vendor:l.d.vendor,'Item Code':l.code,'SAP Code':l.sap,Description:l.name,Qty:l.qty,'Weight kg':l.qty*l.weight})),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(r),'Movements');XLSX.writeFile(wb,'Formwork_Movements_'+new Date().toISOString().slice(0,10)+'.xlsx')}
+const CGROUPS=()=>{const g=groups();return g.length?g:['Slab','Walls & Columns','Scaffolding','Safety']};
+async function savePR(){const ls=F.lines.filter(l=>l.code&&+l.qty>0);if(!F.no.trim())return toast('Enter the PR number');if(!ls.length)return toast('Add at least one item with qty');
+ const no=F.no.trim(),id=F.id||no.replace(/[\/\s]/g,'-'),dup=PRS[id]&&!F.id;if(dup&&!confirm('PR '+no+' already exists. Replace it?'))return;
+ const pj=pjFind(F.project);if(!pj)return toast(Object.keys(PJ).length?'Project is not in the list - pick it from the dropdown, or add it in Master Data > Projects':'Add your projects first: Master Data > Projects');F.project=pj.name;const ops=[];Object.values(LN).filter(l=>l.pr===id).forEach(l=>ops.push(['d','fs_line',l.id]));
+ ls.forEach((l,i)=>{const m=MD[l.code];ops.push(['s','fs_line',id+'_'+(i+1),{pr:id,prNo:no,date:F.date,project:F.project.trim(),od:pj.od||'',plant:pj.plant||'',pcode:pj.pcode||'',psap:pj.sap||'',group:F.group,sr:i+1,code:m.code,sap:m.sap,name:m.name,src:l.src||m.src,qty:+l.qty,weight:m.weight||0,price:m.price||0,rent:m.rent||0,by:(window.firebase&&firebase.apps.length&&firebase.auth().currentUser)?firebase.auth().currentUser.email:'local',at:Date.now()}])});
+ ops.push(['s','fs_pr',id,{no,date:F.date,project:F.project.trim(),od:pj.od||'',plant:pj.plant||'',pcode:pj.pcode||'',psap:pj.sap||'',group:F.group,n:ls.length,at:Date.now()}]);await DB.batch(ops);
+ const c=s=>ls.filter(l=>(l.src||MD[l.code].src)===s).length;toast(`PR ${no} saved: ${c('Owned')} Owned, ${c('Rental')} Rental, ${c('Asset')} Assets`);F=blank();draw()}
+/* ================= register + sheets ================= */
+function reg(){const L2=Object.values(PRS).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||b.at-a.at),ln=Object.values(LN),mvq=(no,t)=>Object.values(DL).filter(l=>(DOC[l.doc]||{}).type===t&&(DOC[l.doc]||{}).ref===no).reduce((a,l)=>a+l.qty,0);
+ return`<div class="bar"><h1>PR Register<small>${L2.length} PRs &middot; delivered / returned come from Delivery &amp; Return documents that reference the PR number</small></h1></div><div class="tw"><table><tr><th>PR No</th><th>Date</th><th>Project</th><th>Group</th><th class="n">Requested</th><th class="n">Delivered</th><th class="n">Returned</th><th class="n">Shortage</th><th>Fill</th><th>Routed to</th><th></th></tr>`+
+ L2.map(p=>{const c=s=>ln.filter(l=>l.pr===p.id&&l.src===s).length,rq=ln.filter(l=>l.pr===p.id).reduce((a,l)=>a+l.qty,0),dv=mvq(p.no,'dlv'),rt=mvq(p.no,'ret'),sh=Math.max(0,rq-dv),f=rq?Math.min(1,dv/rq):0;return`<tr><td><b>${E(p.no)}</b></td><td>${D(p.date)}</td><td>${E(p.project)}</td><td>${E(p.group)}</td><td class="n">${N(rq)}</td><td class="n">${N(dv)}</td><td class="n">${N(rt)}</td><td class="n ${sh?'err':''}">${N(sh)}</td><td>${Math.round(f*100)}%</td><td>${SRC.map(s=>c(s)?`<span class="tg ${s}">${SL[s]} ${c(s)}</span> `:'').join('')}</td><td><button class="sm" onclick="editPR('${Q(p.id)}')">Edit</button> <button class="sm dg" onclick="delPR('${Q(p.id)}')">Delete</button></td></tr>`}).join('')+'</table></div>'}
+function editPR(id){const p=PRS[id];F={id,no:p.no,date:p.date,project:p.project,group:p.group,lines:Object.values(LN).filter(l=>l.pr===id).sort((a,b)=>a.sr-b.sr).map(l=>({code:l.code,qty:l.qty,src:l.src}))};go('new')}
+async function delPR(id){if(!confirm('Delete PR '+PRS[id].no+' and all its lines from every sheet?'))return;await DB.batch([...Object.values(LN).filter(l=>l.pr===id).map(l=>['d','fs_line',l.id]),['d','fs_pr',id]]);toast('PR deleted')}
+function sheet(s){const all=Object.values(LN).filter(l=>l.src===s),pj=['All',...new Set(all.map(l=>l.project).filter(Boolean))],q=QS.toLowerCase();
+ const rows=all.filter(l=>(PSEL==='All'||l.project===PSEL)&&(!q||(l.prNo+l.code+l.name+l.sap).toLowerCase().includes(q))).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||a.prNo.localeCompare(b.prNo)||a.sr-b.sr);
+ const q1=rows.reduce((a,l)=>a+l.qty,0),w=rows.reduce((a,l)=>a+l.qty*l.weight,0),v=rows.reduce((a,l)=>a+l.qty*l.price,0),h=rows.reduce((a,l)=>a+l.qty*l.rent,0);window.__rows=rows;
+ return`<div class="bar"><h1>${SL[s]} sheet<small>Live &mdash; every PR line with source "${SL[s]}" appears here the moment it is saved</small></h1><button class="sm" onclick="xp('${s}')">Export Excel</button></div>
+ <div class="kp"><div class="k"><label>Lines</label><div>${rows.length}</div></div><div class="k" style="--c:var(--bl)"><label>Total qty</label><div>${N(q1)}</div></div><div class="k" style="--c:var(--gr)"><label>Weight (ton)</label><div>${N1(w/1000)}</div></div><div class="k" style="--c:var(--pu)"><label>Purchase value</label><div>${(v/1e6).toFixed(2)}M</div></div><div class="k" style="--c:var(--rd)"><label>Rent / month</label><div>${N(h)}</div></div></div>
+ <div class="tools"><select onchange="PSEL=this.value;draw()">${pj.map(p=>`<option ${p===PSEL?'selected':''}>${E(p)}</option>`).join('')}</select><input placeholder="Search PR / code / item..." value="${E(QS)}" oninput="QS=this.value;clearTimeout(window.__t);window.__t=setTimeout(()=>{draw();const i=document.querySelector('.tools input');i.focus();i.setSelectionRange(99,99)},250)"></div>
+ <div class="tw"><table><tr><th>PR No</th><th>Date</th><th>Project</th><th>OD</th><th>Plant</th><th>Code</th><th>Project SAP</th><th>Group</th><th>SR</th><th>Code</th><th>SAP</th><th>Description</th><th class="n">Qty</th><th class="n">Weight kg</th><th class="n">Value EGP</th></tr>`+
+ rows.slice(0,600).map(l=>`<tr><td><b>${E(l.prNo)}</b></td><td>${D(l.date)}</td><td>${E(l.project)}</td><td class="mu">${E(l.od)}</td><td class="mu">${E(l.plant)}</td><td class="mu">${E(l.pcode)}</td><td class="mu">${E(l.psap)}</td><td class="mu">${E(l.group)}</td><td class="mu">${l.sr}</td><td>${E(l.code)}</td><td class="mu">${E(l.sap)}</td><td>${E(l.name)}</td><td class="n"><b>${N(l.qty)}</b></td><td class="n">${l.weight?N1(l.qty*l.weight):'-'}</td><td class="n">${l.price?N(l.qty*l.price):'-'}</td></tr>`).join('')+`<tr class="t"><td colspan="12">Total (${rows.length} lines)</td><td class="n">${N(q1)}</td><td class="n">${N1(w)}</td><td class="n">${N(v)}</td></tr></table></div>`}
+function xp(s){const r=window.__rows.map(l=>({'PR No':l.prNo,Date:l.date,Project:l.project,OD:l.od,Plant:l.plant,'Plant Code':l.pcode,'Project SAP':l.psap,Group:l.group,SR:l.sr,'Item Code':l.code,'SAP Code':l.sap,Description:l.name,Qty:l.qty,'Weight kg':l.qty*l.weight,'Purchase Value':l.qty*l.price,'Rent / Month':l.qty*l.rent})),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(r),SL[s]);XLSX.writeFile(wb,`Formwork_${SL[s]}_${new Date().toISOString().slice(0,10)}.xlsx`)}
+function mdp(){const a=Object.values(PJ).sort((x,y)=>x.name.localeCompare(y.name)),inp=(p,k)=>`<input value="${E(p[k]||'')}" onchange="setPj('${Q(p.id)}','${k}',this.value)" style="width:100%;min-width:110px;padding:5px 7px">`;
+ return`<div class="card"><div class="sub" style="margin-bottom:8px">English names only, written as Title Case (first letter of each word capital, the rest small) &mdash; the app fixes the format for you. Paste from Excel with columns <b>Project &middot; OD &middot; Plant &middot; Plant Code &middot; SAP Code</b> (tab-separated, one project per line) &mdash; existing projects are updated, Arabic names are skipped.</div><textarea id="pjt" rows="4" style="width:100%" placeholder="Mivida Gardens&#9;Eng. Hamdy Swillam&#9;Plant name&#9;1234&#9;5678"></textarea><div class="tools" style="margin:10px 0 0"><button class="btn" onclick="addProjects()">Save pasted rows</button><button class="sm" onclick="seedProjects()">Load the portal's ${Object.keys(OD_SEED).length} projects + OD</button><button class="sm" onclick="fixNames()">Fix name format</button><span class="sub">${a.length} projects in the list</span></div></div>
+ <div class="tw"><table><tr><th>Project</th><th>OD</th><th>Plant</th><th>Plant code</th><th>SAP code</th><th></th></tr>${a.map(p=>`<tr><td><b>${E(p.name)}</b></td><td>${inp(p,'od')}</td><td>${inp(p,'plant')}</td><td>${inp(p,'pcode')}</td><td>${inp(p,'sap')}</td><td style="width:44px"><button class="x" onclick="delProject('${Q(p.id)}')">&times;</button></td></tr>`).join('')}</table></div>`}
+function md(){if(MDT==='pj')return`<div class="bar"><h1>Master Data<small>The only project names the PR form and transfers accept</small></h1></div>`+mdTabs()+mdp();return mdi()}
+const mdTabs=()=>`<div class="tools"><div class="chips"><button class="${MDT==='items'?'on':''}" onclick="MDT='items';draw()">Items (${Object.keys(MD).length})</button><button class="${MDT==='pj'?'on':''}" onclick="MDT='pj';draw()">Projects (${Object.keys(PJ).length})</button></div></div>`;
+function mdi(){const a=Object.values(MD),q=MQ.toLowerCase(),r=a.filter(m=>!q||(m.code+m.name+m.sap).toLowerCase().includes(q));
+ return`<div class="bar"><h1>Master Data<small>${a.length} items &middot; the only names the PR form allows &mdash; import again to update</small></h1><button class="btn" onclick="$('fmd').click()">Import / update Master Data</button></div>${mdTabs()}
+ ${a.length?`<div class="tools"><input placeholder="Search..." value="${E(MQ)}" oninput="MQ=this.value;draw();const i=document.querySelector('.tools input');i.focus();i.setSelectionRange(99,99)"><span class="sub">${r.length} shown &middot; groups: ${groups().map(g=>g+' '+a.filter(m=>m.group===g).length).join(' · ')}</span></div><div class="tw"><table><tr><th>Code</th><th>SAP</th><th>Name</th><th>Group</th><th>Default</th><th class="n">Weight</th><th class="n">Internal rent</th><th class="n">External</th><th class="n">Purchase</th></tr>${r.slice(0,300).map(m=>`<tr><td><b>${E(m.code)}</b></td><td class="mu">${E(m.sap)}</td><td>${E(m.name)}</td><td>${E(m.group)}</td><td><span class="tg ${m.src}">${SL[m.src]}</span></td><td class="n">${m.weight||'-'}</td><td class="n">${N1(m.rent)}</td><td class="n">${N1(m.ext)}</td><td class="n">${N(m.price)}</td></tr>`).join('')}</table></div>`:`<div class="drop"><h2>Import the Master Data sheet</h2><p>Columns: Item Code, SAP Code, Item Name, Group, Default Source, Weight, Internal Rent, External Rent, Purchase Value.</p><button class="btn" onclick="$('fmd').click()">Choose Master_Data_Formwork.xlsx</button></div>`}`}
+function draw(){['new','dr','trn','po','pn','reg','mv','pl','Owned','Asset','Rental','md'].forEach(k=>$('n-'+k).classList.toggle('on',k===PAGE));const pg=$('pg');
+ CF=PAGE==='new'?F:G;pjl();pg.innerHTML=PAGE==='new'?newPR():FORMS.includes(PAGE)?docForm():PAGE==='reg'?reg():PAGE==='mv'?mv():PAGE==='pl'?plan():PAGE==='md'?md():sheet(PAGE);if(PAGE==='new'||FORMS.includes(PAGE)){dlist();lines();pjInfo()}}
+function go(p){PAGE=p;if(p==='md')MDT=MDT||'items';if(FORMS.includes(p)&&G.page!==p)G=blankDoc(p);QS='';PSEL='All';MQ='';if(p==='new'&&!F.id&&0)F=blank();draw();scrollTo(0,0)}
+function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',4500)}
+(async()=>{await initDB();$('app').style.display='flex';DB.start();draw()})();
+</script></body></html>
