@@ -459,7 +459,7 @@ let SK=null;
 const skArea=p=>{let a=0;p.forEach((q,i)=>{const r=p[(i+1)%p.length];a+=q[0]*r[1]-r[0]*q[1]});return Math.abs(a)/2};
 const skSq=()=>+(skArea(SK.pts)*SK.g*SK.g).toFixed(2);
 const skCell=e=>{const v=$('sks'),r=v.getBoundingClientRect();return[(e.clientX-r.left)*600/r.width/20,(e.clientY-r.top)*400/r.height/20]};
-function skOpen(ix){const a=ix>=0?(F.areas||[])[ix]:null;SK={g:a?a.g:1,pts:a?skP(a):[],closed:!!a,drag:-1,ix:a?ix:-1,n:a?a.n:''};let d=$('sk');if(!d){d=document.createElement('div');d.className='modal';d.id='sk';document.body.appendChild(d)}
+function skOpen(ix){const a=ix>=0?(F.areas||[])[ix]:null;SK={g:a?a.g:1,pts:a?skP(a):[],closed:!!a,drag:-1,ix:a?ix:-1,n:a?a.n:'Area '+String.fromCharCode(65+(F.areas||[]).length%26)};let d=$('sk');if(!d){d=document.createElement('div');d.className='modal';d.id='sk';document.body.appendChild(d)}
  d.innerHTML=`<div class="box" style="width:min(700px,100%);max-height:94vh;overflow:auto"><h3>Sketch area</h3><div class="sub">Click to place corners, click the first point to close. Then drag any corner to adjust. Or start from a typed Length &times; Width. Each square = the grid size.</div>
  <div class="tools" style="margin:10px 0 6px"><input id="skn" placeholder="Name (e.g. Slab A)" value="${E(SK.n)}" style="width:150px"><span class="sub">Grid</span><select id="skg" onchange="SK.g=+this.value;skDraw()">${[0.1,0.25,0.5,1,2,5].map(g=>`<option value="${g}" ${g===SK.g?'selected':''}>${g} m</option>`).join('')}</select><input id="skl" type="number" min="0" step="any" placeholder="L m" style="width:75px"><input id="skw" type="number" min="0" step="any" placeholder="W m" style="width:75px"><button class="sm" onclick="skPre(0)">Rectangle</button><button class="sm" onclick="skPre(1)">L-shape</button></div>
  <svg id="sks" viewBox="0 0 600 400" style="width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:8px;touch-action:none;cursor:crosshair"><defs><pattern id="skp" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#30363d" stroke-width=".6"/></pattern></defs><rect width="600" height="400" fill="url(#skp)"/><g id="skd"></g></svg>
@@ -477,7 +477,24 @@ function skDraw(){if(!SK)return;const P=SK.pts,px=q=>q[0]*20+','+q[1]*20,n=P.len
  if(n>1)h+=`<${SK.closed?'polygon':'polyline'} points="${P.map(px).join(' ')}" fill="${SK.closed?'rgba(240,165,0,.18)':'none'}" stroke="#f0a500" stroke-width="2"/>`;
  for(let i=0;i<eN;i++){const a=P[i],b=P[(i+1)%n],len=+(Math.hypot(a[0]-b[0],a[1]-b[1])*SK.g).toFixed(2);if(len)h+=`<text x="${(a[0]+b[0])*10}" y="${(a[1]+b[1])*10-5}" fill="#e6edf3" font-size="11" text-anchor="middle" style="pointer-events:none">${len} m</text>`}
  P.forEach((q,i)=>h+=`<circle cx="${q[0]*20}" cy="${q[1]*20}" r="${!SK.closed&&i===0&&n>2?8:5}" fill="${i===0?'#3fb950':'#f0a500'}" style="cursor:${SK.closed?'move':'pointer'}"/>`);
- $('skd').innerHTML=h;$('ski').innerHTML=SK.closed?`Area <b style="color:var(--ac)">${N1(skSq())} m&sup2;</b> &middot; drag a corner to adjust`:`${n} point(s) &middot; ${n>2?'click the green point to close':'keep clicking to add corners'}`}
+ $('skd').innerHTML=h;let info=SK.closed?`Area <b style="color:var(--ac)">${N1(skSq())} m&sup2;</b> &middot; drag a corner to adjust`:`${n} point(s) &middot; ${n>2?'click the green point to close':'keep clicking to add corners'}`;$('ski').innerHTML=info+skHints()}
+
+/* live suggestions while sketching (rule based, no external service) */
+const skFit=(w,h)=>w>0&&h>0?[0.1,0.25,0.5,1,2,5].find(g=>w*SK.g/g<=26&&h*SK.g/g<=16):0;
+const skSeg=(a,b,c,d)=>{const o=(p,q,r)=>(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]);return o(a,b,c)*o(a,b,d)<0&&o(c,d,a)*o(c,d,b)<0};
+const skCross=P=>{const n=P.length;for(let i=0;i<n;i++)for(let j=i+2;j<n;j++){if(i===0&&j===n-1)continue;if(skSeg(P[i],P[(i+1)%n],P[j],P[(j+1)%n]))return true}return false};
+function skHints(){const P=SK.pts,n=P.length,h=[],tip=t=>h.push(`<div class="sub" style="margin-top:5px">&#128161; ${t}</div>`);
+ if(n>2&&skCross(P))tip('<span class="err">The lines cross each other &mdash; the area will be wrong. Undo or move a corner.</span>');
+ if(SK.closed){
+  if(n===4){const e=[0,1,2,3].map(i=>{const a=P[i],b=P[(i+1)%4];return[b[0]-a[0],b[1]-a[1]]}),len=v=>Math.hypot(v[0],v[1]),sq=e.every((u,i)=>{const v=e[(i+1)%4];return len(u)&&len(v)&&Math.abs(u[0]*v[0]+u[1]*v[1])/(len(u)*len(v))<.12}),ax=e.every(v=>Math.abs(v[0])<1e-6||Math.abs(v[1])<1e-6);
+   if(sq)tip(ax?'Rectangle '+(+(len(e[0])*SK.g).toFixed(2))+' &times; '+(+(len(e[1])*SK.g).toFixed(2))+' m':'It looks like a rectangle but it is tilted &mdash; <span class="lk" onclick="skSquare()">make it an exact rectangle</span>')}
+  const xs=P.map(q=>q[0]),ys=P.map(q=>q[1]),w=Math.max(...xs)-Math.min(...xs),hh=Math.max(...ys)-Math.min(...ys),z=skFit(w,hh);
+  if(w<=10&&hh<=7&&z&&z<SK.g)tip('The shape is small on the grid &mdash; <span class="lk" onclick="skZoom()">zoom in to '+z+' m squares</span> for a more accurate drawing');
+  if(CALC){const A=skSq(),k=1+Math.max(0,+CALC.waste||0)/100,rs=cRules().slice(0,6);if(rs.length)tip('For '+N1(A)+' m&sup2; ('+E(CALC.group)+'): '+rs.map(m=>E(m.code)+' &times; '+Math.ceil(+(A*m.perM2*k).toFixed(6))).join(' &middot; '))}
+ }else if(n>=3)tip('Click the green point to close the shape');
+ return h.join('')}
+function skSquare(){const P=SK.pts,d=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]),L=(d(P[0],P[1])+d(P[2],P[3]))/2,W=(d(P[1],P[2])+d(P[3],P[0]))/2,x=Math.min(...P.map(q=>q[0])),y=Math.min(...P.map(q=>q[1]));SK.pts=[[x,y],[x+L,y],[x+L,y+W],[x,y+W]];skDraw()}
+function skZoom(){const P=SK.pts,xs=P.map(q=>q[0]),ys=P.map(q=>q[1]),x0=Math.min(...xs),y0=Math.min(...ys),z=skFit(Math.max(...xs)-x0,Math.max(...ys)-y0);if(!z||z>=SK.g)return;const k=SK.g/z;SK.pts=P.map(q=>[(q[0]-x0)*k+2,(q[1]-y0)*k+2]);SK.g=z;$('skg').value=z;skDraw()}
 function skUse(){if(!SK||!SK.closed||SK.pts.length<3)return toast('Close the shape first');const a=skSq();if(!(a>0))return toast('The area is zero');
  const nm=$('skn').value.trim()||'Sketch',rec={n:nm,g:SK.g,pts:SK.pts.flatMap(q=>[+q[0].toFixed(3),+q[1].toFixed(3)])};
  F.areas=F.areas||[];if(SK.ix>=0)F.areas[SK.ix]=rec;else F.areas.push(rec);
