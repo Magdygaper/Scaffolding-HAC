@@ -96,10 +96,272 @@ async function setCell(id,s,ph,v){const p=PRS[id];if(!p)return;const all=Object.
  v?cl[s+'_'+ph]=1:delete cl[s+'_'+ph];const t=TRK[id],closed=!!(t&&t.size&&[...t].every(x=>PH.every(h=>cl[x+'_'+h])));
  await DB.set('fs_pr',id,{...p,cl,closed,closedAt:closed?(p.closedAt||Date.now()):null});toast('PR '+p.no+' \u00b7 '+SL[s]+' \u00b7 '+PHN[ph]+(v?' closed':' re-opened'));if(PAGE==='prd'||PAGE==='reg')draw()}
 
+/* ===== export engine copied from the equipment portal: navy header, amber rule, zebra rows, totals, filters / searchable print page ===== */
+(function(){
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function two(n){ return n<10?'0'+n:''+n; }
+  function pageScript(){
+    var tb=document.getElementById('tb'), rows=[].slice.call(tb.rows);
+    var inputs=[].slice.call(document.querySelectorAll('.flt input'));
+    var g=document.getElementById('gq'), cnt=document.getElementById('cnt');
+    var sumCols=[].slice.call(document.querySelectorAll('#tf td[data-sum]'));
+    function fmt(n){ return Math.round(n).toLocaleString('en-US'); }
+    function test(q,txt,num,isNum){
+      q=q.trim().toLowerCase(); if(!q) return true;
+      if(isNum){
+        var m=q.match(/^(>=|<=|>|<|=)\s*(-?[\d.,]+)$/);
+        if(m){ var v=parseFloat(m[2].replace(/,/g,'')); if(isNaN(v)) return true;
+          return m[1]==='>'?num>v:m[1]==='<'?num<v:m[1]==='>='?num>=v:m[1]==='<='?num<=v:num===v; }
+      }
+      return txt.indexOf(q)>=0;
+    }
+    function apply(){
+      var gq=g.value.trim().toLowerCase(), shown=0, sums={};
+      rows.forEach(function(tr){
+        var ok=!gq||tr.getAttribute('data-t').indexOf(gq)>=0;
+        if(ok) inputs.forEach(function(inp){
+          if(!ok) return; var c=+inp.getAttribute('data-c'), td=tr.cells[c];
+          ok=test(inp.value, td.textContent.toLowerCase(), parseFloat(td.getAttribute('data-v')), inp.hasAttribute('data-n'));
+        });
+        tr.style.display=ok?'':'none';
+        if(ok){ shown++; sumCols.forEach(function(t){ var c=+t.getAttribute('data-c'); sums[c]=(sums[c]||0)+(parseFloat(tr.cells[c].getAttribute('data-v'))||0); }); }
+      });
+      cnt.textContent=shown+' / '+rows.length+' rows';
+      sumCols.forEach(function(t){ t.textContent=fmt(sums[+t.getAttribute('data-c')]||0); });
+    }
+    g.addEventListener('input',apply);
+    inputs.forEach(function(i){ i.addEventListener('input',apply); });
+    document.getElementById('clr').addEventListener('click',function(){ g.value=''; inputs.forEach(function(i){i.value='';}); apply(); });
+    var pinned=null;
+    tb.addEventListener('click',function(e){
+      var tr=e.target; while(tr&&tr!==tb&&tr.tagName!=='TR') tr=tr.parentNode;
+      if(!tr||tr===tb) return;
+      if(pinned&&pinned!==tr) pinned.classList.remove('hl');
+      tr.classList.toggle('hl'); pinned=tr.classList.contains('hl')?tr:null;
+    });
+    apply();
+  }
+  /* cell types: t=text, i=integer, d=1 decimal, m=money(0 dec), z=money zero->dash, dz=1 decimal zero->dash, p=percent */
+  function cell(v,t){
+    if(t==='t'){
+      if(v instanceof Date) v=v.getFullYear()+'-'+two(v.getMonth()+1)+'-'+two(v.getDate());
+      return {txt:v==null?'':String(v), num:NaN, cls:''};
+    }
+    var n=Number(v); if(!isFinite(n)) n=0;
+    if(t==='i') return {txt:Math.round(n).toLocaleString('en-US'), num:Math.round(n), cls:'n'};
+    if(t==='d') return {txt:n.toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1}), num:+n.toFixed(1), cls:'n'};
+    if(t==='dz') return n? {txt:n.toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1}), num:+n.toFixed(1), cls:'n'} : {txt:'\u2013', num:0, cls:'n z'};
+    if(t==='m') return {txt:Math.round(n).toLocaleString('en-US'), num:Math.round(n), cls:'n'};
+    if(t==='z') return Math.round(n)? {txt:Math.round(n).toLocaleString('en-US'), num:Math.round(n), cls:'n'} : {txt:'\u2013', num:0, cls:'n z'};
+    if(t==='p') return {txt:Math.round(n)+'%', num:Math.round(n), cls:'n'+(n<75?' lo':'')};
+    return {txt:'', num:NaN, cls:''};
+  }
+  /* ═════ Excel export — same table as the PDF, as a formatted sheet ═════
+     navy header · zebra rows · frozen header + filter buttons · totals row with SUBTOTAL (follows the filter,
+     like the PDF footer) · A4 landscape print setup with the header repeated on every page. */
+  var XL_FMT={f:'#,##0.00',i:'#,##0',d:'#,##0.0',m:'#,##0',z:'#,##0;-#,##0;"\u2013"',dz:'#,##0.0;-#,##0.0;"\u2013"',p:'0"%"'};
+  function colLetter(n){ var s='',m; while(n>0){ m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; }
+  function buildXlsx(o,EJ){
+    var kpiRows=(o.kpis&&o.kpis.length)?1:0, hdrRow=3+kpiRows;
+    var cols=o.cols, rows=o.rows, nC=cols.length, nR=rows.length, first=hdrRow+1, last=hdrRow+nR, tot=last+1, lastCol=colLetter(nC);
+    var wb=o.wb||new EJ.Workbook(); if(!o.wb){ wb.creator='HAC PMV'; wb.created=new Date(); }
+    var ws=wb.addWorksheet(o.sheetName||String(o.title||'Export').replace(/^\s*HAC\s*\u00b7\s*PMV\s*\u2014\s*/,'').replace(/[\\\/\?\*\[\]:]/g,' ').slice(0,31),
+      {views:[{state:'frozen',ySplit:hdrRow,activeCell:'A'+first}],properties:{tabColor:{argb:'FFF0A500'}}});
+    var NAVY='FF0D1B2E', AMBER='FFF0A500', thinB={style:'thin',color:{argb:'FFE3E7ED'}};
+    ws.mergeCells('A1:'+lastCol+'1'); ws.mergeCells('A2:'+lastCol+'2');
+    var t1=ws.getCell('A1'); t1.value=String(o.title||'').replace(/^\s*HAC\s*\u00b7\s*PMV\s*\u2014\s*/,''); t1.font={name:'Calibri',size:15,bold:true,color:{argb:NAVY}}; t1.alignment={vertical:'middle',horizontal:'center'};
+    ws.getRow(1).height=26;
+    var t2=ws.getCell('A2'); t2.value=nR.toLocaleString('en-US')+(o.sub?' \u00b7 '+o.sub:'');
+    t2.font={name:'Calibri',size:12,bold:true,color:{argb:'FF444444'}}; t2.alignment={vertical:'middle',horizontal:'center'}; t2.border={bottom:{style:'medium',color:{argb:AMBER}}};
+    for(var c=2;c<=nC;c++) ws.getCell(2,c).border={bottom:{style:'medium',color:{argb:AMBER}}};
+    if(kpiRows){
+      ws.mergeCells('A3:'+lastCol+'3');
+      var tk=ws.getCell('A3');
+      tk.value=o.kpis.map(function(k){ return k.label+': '+k.value; }).join('   \u00b7   ');
+      tk.font={name:'Calibri',size:10.5,bold:true,color:{argb:NAVY}};
+      tk.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF6DA'}};
+      tk.alignment={vertical:'middle',horizontal:'center'};
+      tk.border={bottom:{style:'medium',color:{argb:AMBER}}};
+      ws.getRow(3).height=20;
+    }
+    var hr=ws.getRow(hdrRow); hr.height=30;
+    cols.forEach(function(col,j){
+      var cell=hr.getCell(j+1); cell.value=(col.h==='#'?'S/N':col.h);
+      cell.font={name:'Calibri',size:10,bold:true,color:{argb:'FFFFFFFF'}};
+      cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}};
+      cell.alignment={vertical:'middle',horizontal:col.t==='t'?'left':'right',wrapText:true};
+      cell.border={bottom:{style:'medium',color:{argb:AMBER}}};
+    });
+    var w=cols.map(function(col){ return String(col.h).length*1.15+3; });
+    var sums=cols.map(function(){ return 0; });
+    rows.forEach(function(r,i){
+      var row=ws.getRow(first+i), zebra=(i%2===1);
+      cols.forEach(function(col,j){
+        var v=col.g(r,i), cell=row.getCell(j+1);
+        if(col.t==='t'){
+          if(v instanceof Date) v=v.getFullYear()+'-'+two(v.getMonth()+1)+'-'+two(v.getDate());
+          v=(v==null)?'':String(v); cell.value=v;
+          cell.alignment={vertical:'middle',horizontal:'left'};
+          if(v.length+2>w[j]) w[j]=Math.min(46,v.length+2);
+        } else {
+          var n=Number(v); if(!isFinite(n)) n=0;
+          if(col.t==='i'||col.t==='m'||col.t==='z'||col.t==='p') n=Math.round(n); else n=+n.toFixed(col.t==='f'?2:1);
+          cell.value=n; cell.numFmt=XL_FMT[col.t]||'#,##0';
+          cell.alignment={vertical:'middle',horizontal:'right'};
+          if(col.t==='p'&&n<75) cell.font={name:'Calibri',size:10,bold:true,color:{argb:'FFD93025'}};
+          else if((col.t==='z'||col.t==='dz')&&!n) cell.font={name:'Calibri',size:10,color:{argb:'FFBBBBBB'}};
+          if(col.s) sums[j]+=n;
+          var L=String(Math.round(n)).length+3; if(L>w[j]) w[j]=Math.min(46,L);
+        }
+        if(!cell.font) cell.font={name:'Calibri',size:10};
+        if(zebra) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF8FAFC'}};
+        cell.border={bottom:thinB};
+      });
+    });
+    var tr=ws.getRow(tot); tr.height=20;
+    cols.forEach(function(col,j){
+      var cell=tr.getCell(j+1);
+      if(j===0) cell.value='Total';
+      else if(col.s){ cell.value={formula:'SUBTOTAL(109,'+colLetter(j+1)+first+':'+colLetter(j+1)+last+')',result:sums[j]}; cell.numFmt=XL_FMT[col.t]||'#,##0'; cell.alignment={horizontal:'right'}; }
+      cell.font={name:'Calibri',size:10,bold:true};
+      cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF4F4F4'}};
+      cell.border={top:{style:'medium',color:{argb:AMBER}}};
+    });
+    ws.columns=cols.map(function(col,j){ return {width:Math.max(8,Math.min(46,w[j]))}; });
+    if(nR) ws.autoFilter={from:{row:hdrRow,column:1},to:{row:last,column:nC}};
+    ws.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,
+      margins:{left:.3,right:.3,top:.4,bottom:.5,header:.2,footer:.2},printTitlesRow:hdrRow+':'+hdrRow};
+    ws.headerFooter={oddFooter:'&L&8HAC \u00b7 PMV&C&8Page &P of &N&R&8&D'};
+    return wb;
+  }
+  window.hacBuildXlsx=buildXlsx;
+  window.hacXlsxTable=function(o){
+    var rows=o.rows||[];
+    if(!rows.length){ if(typeof toast==='function') toast('Nothing to export','error'); return; }
+    var EJ=window.ExcelJS;
+    if(!EJ){ if(typeof toast==='function') toast('Excel library did not load \u2014 check the internet connection','error'); return; }
+    var d=new Date(), stamp=d.getFullYear()+'-'+two(d.getMonth()+1)+'-'+two(d.getDate());
+    var fname=String(o.title||'Export').replace(/[\\\/:*?"<>|\u00b7\u2014]+/g,' ').replace(/\s+/g,'_').replace(/^_+|_+$/g,'')+'_'+stamp+'.xlsx';
+    buildXlsx(o,EJ).xlsx.writeBuffer().then(function(buf){
+      var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fname;
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1500);
+    }).catch(function(err){ if(typeof toast==='function') toast('Excel export failed: '+(err&&err.message||err),'error'); });
+  };
+
+  /* ─── unified helpers: every plain export now goes through the SAME styled engine (navy header · amber rule · zebra · totals · filters) ─── */
+  function xlDownload(wb,base){
+    var d=new Date(), stamp=d.getFullYear()+'-'+two(d.getMonth()+1)+'-'+two(d.getDate());
+    wb.xlsx.writeBuffer().then(function(buf){
+      var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+      a.download=String(base).replace(/[\\\/:*?"<>|]+/g,'_')+'_'+stamp+'.xlsx'; document.body.appendChild(a); a.click();
+      setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1500);
+      if(typeof toast==='function') toast('Excel exported','success');
+    }).catch(function(err){ if(typeof toast==='function') toast('Excel export failed: '+(err&&err.message||err),'error'); });
+  }
+  /* array of plain objects -> sheet spec for buildXlsx. Column types are detected: integers 'i', decimals 'f', everything else text.
+     Year / code / SAP / serial style columns always stay text (so 2019 is not shown as 2,019). o: {title, sub, sheetName, sum:['Header',...]} */
+  window.hacXlsxJson=function(objs,o){
+    o=o||{}; objs=objs||[];
+    var keys=[], seen={}; objs.forEach(function(r){ Object.keys(r).forEach(function(k){ if(!seen[k]){ seen[k]=1; keys.push(k); } }); });
+    var sum={}; (o.sum||[]).forEach(function(k){ sum[k]=1; });
+    var cols=keys.map(function(k){
+      var vals=objs.map(function(r){ return r[k]; }).filter(function(v){ return v!==''&&v!=null; });
+      var blanks=vals.length<objs.length, t='t';
+      if(vals.length&&!/year|code|sap|serial|plate|chassis|\bno\b|number|phone/i.test(k)&&vals.every(function(v){ return typeof v==='number'&&isFinite(v); })){
+        t=vals.every(function(v){ return Math.floor(v)===v; })?(blanks?'z':'i'):'f';
+      }
+      return {h:k,g:function(r){ return r[k]; },t:t,s:!!sum[k]&&t!=='t'};
+    });
+    return {title:o.title||'Export',sub:o.sub||'',sheetName:o.sheetName,cols:cols,rows:objs,kpis:o.kpis};
+  };
+  /* several styled sheets in ONE workbook. sheets: [spec,...] (spec from hacXlsxJson or {title,cols,rows,sheetName}) */
+  window.hacXlsxMulti=function(base,sheets){
+    var EJ=window.ExcelJS;
+    if(!EJ){ if(typeof toast==='function') toast('Excel library did not load \u2014 check the internet connection','error'); return; }
+    sheets=(sheets||[]).filter(function(sh){ return sh&&sh.rows&&sh.rows.length; });
+    if(!sheets.length){ if(typeof toast==='function') toast('Nothing to export','error'); return; }
+    var wb=new EJ.Workbook(), used={}; wb.creator='HAC PMV'; wb.created=new Date();
+    try{
+      sheets.forEach(function(sh){
+        var b0=String(sh.sheetName||sh.title||'Sheet').replace(/^\s*HAC\s*\u00b7\s*PMV\s*\u2014\s*/,'').replace(/[\\\/\?\*\[\]:]/g,' ').trim().slice(0,26)||'Sheet', nm=b0, n=1;
+        while(used[nm.toLowerCase()]){ nm=b0+'_'+(++n); } used[nm.toLowerCase()]=1;
+        buildXlsx(Object.assign({},sh,{wb:wb,sheetName:nm}),EJ);
+      });
+    }catch(err){ console.error(err); if(typeof toast==='function') toast('Excel export failed: '+(err&&err.message||err),'error'); return; }
+    xlDownload(wb,base);
+  };
+
+  /* opts: {title, sub, cols:[{h:'Header', g:function(row,i){...}, t:'t'|'i'|..., s:true(sum)}], rows:[...]}  ·  kind 'xlsx' -> Excel instead of PDF */
+  window.hacPdfTable=function(o,kind){
+    if(kind==='xlsx') return window.hacXlsxTable(o);
+    var rows=o.rows||[], cols=o.cols||[];
+    if(!rows.length){ if(typeof toast==='function') toast('Nothing to export','error'); return; }
+    var h='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+esc(o.title)+'</title><style>';
+    h+='*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,Arial,sans-serif;color:#1a1a1a;background:#fff;padding:16px 18px;font-size:10px}';
+    h+='h1{font-size:16px;margin-bottom:2px}.sub{font-size:10px;color:#666;margin-bottom:10px;border-bottom:3px solid #f0a500;padding-bottom:8px}';
+    h+='.bar{display:flex;gap:8px;align-items:center;margin-bottom:10px;position:sticky;top:0;background:#fff;padding:6px 0;z-index:5}';
+    h+='.bar input{border:1px solid #ccc;border-radius:6px;padding:6px 10px;font-size:12px;width:280px}#cnt{font-size:11px;color:#555}';
+    h+='.bar button{background:#f0a500;color:#000;border:0;padding:7px 14px;border-radius:6px;font-weight:700;cursor:pointer}.bar .g{background:#eee}.bar .sp{flex:1}';
+    h+='table{width:100%;border-collapse:collapse}th{background:#f4f4f4;font-size:8.5px;text-transform:uppercase;color:#555;text-align:left;padding:5px 6px;border-bottom:1px solid #ddd;white-space:nowrap}';
+    h+='th.n,td.n{text-align:right;font-variant-numeric:tabular-nums}';
+    h+='.flt th{padding:2px 3px;background:#fff}.flt input{width:100%;min-width:34px;border:1px solid #ddd;border-radius:4px;padding:2px 4px;font-size:9px}';
+    h+='td{padding:4px 6px;border-bottom:1px solid #eee;font-size:9.5px;white-space:nowrap}tbody tr:nth-child(even) td{background:#fafafa}';
+    h+='td.z{color:#bbb}td.lo{color:#d93025;font-weight:600}';
+    h+='tbody tr{cursor:pointer}tbody tr:hover td{background:#fff3b0}tbody tr.hl td{background:#ffe94d !important;font-weight:600}';
+    h+='tfoot td{background:#f4f4f4;font-weight:700;border-top:2px solid #f0a500;font-size:10px}';
+    h+='.kpis{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}.k{border:1px solid #e0e0e0;border-left:3px solid #f0a500;border-radius:5px;padding:6px 10px;background:#fafafa;font-size:10.5px}.k b{font-weight:700}';
+    h+='@media print{.bar,.flt{display:none}body{padding:6px 8px}tbody tr:hover td{background:inherit}tbody tr:nth-child(even):hover td{background:#fafafa}';
+    h+='*{-webkit-print-color-adjust:exact;print-color-adjust:exact}thead{display:table-header-group}tr{page-break-inside:avoid}@page{size:A4 landscape;margin:7mm}}';
+    h+='</style></head><body>';
+    h+='<h1 style="text-align:center">'+esc(String(o.title).replace(/^\s*HAC\s*\u00b7\s*PMV\s*\u2014\s*/,''))+'</h1><div class="sub" style="text-align:center;font-weight:700">'+rows.length.toLocaleString('en-US')+(o.sub?' \u00b7 '+esc(o.sub):'')+'</div>';
+    if(o.kpis && o.kpis.length) h+='<div class="kpis">'+o.kpis.map(function(k){ return '<div class="k">'+esc(k.label)+': <b>'+esc(String(k.value))+'</b></div>'; }).join('')+'</div>';
+    h+='<div class="bar"><input id="gq" placeholder="Search all columns\u2026"><button class="g" id="clr">Clear</button><span id="cnt"></span><span class="sp"></span><button onclick="window.print()">\ud83d\udda8 Print / Save PDF</button></div>';
+    h+='<table><thead><tr>'+cols.map(function(c){ return '<th'+(c.t==='t'?'':' class="n"')+'>'+esc(c.h==='#'?'S/N':c.h)+'</th>'; }).join('')+'</tr>';
+    h+='<tr class="flt">'+cols.map(function(c,j){ return '<th><input data-c="'+j+'"'+(c.t==='t'?'':' data-n="1" placeholder="&gt;100"')+'></th>'; }).join('')+'</tr></thead><tbody id="tb">';
+    rows.forEach(function(r,i){
+      var cs=cols.map(function(c){ return cell(c.g(r,i),c.t); });
+      h+='<tr data-t="'+esc(cs.map(function(x){return x.txt;}).join(' ').toLowerCase())+'">'+cs.map(function(x){ return '<td'+(x.cls?' class="'+x.cls+'"':'')+(isNaN(x.num)?'':' data-v="'+x.num+'"')+'>'+esc(x.txt)+'</td>'; }).join('')+'</tr>';
+    });
+    h+='</tbody><tfoot><tr id="tf">'+cols.map(function(c,j){
+      if(j===0) return '<td>Total</td>';
+      return c.s?'<td class="n" data-sum="1" data-c="'+j+'"></td>':'<td></td>';
+    }).join('')+'</tr></tfoot></table>';
+    h+='<scr'+'ipt>('+pageScript.toString()+')();</scr'+'ipt></body></html>';
+    var w=window.open('','_blank');try{ if(w) w.opener=null; }catch(_e){}
+    if(!w){ if(typeof toast==='function') toast('Popup blocked','error'); return; }
+    w.document.write(h); w.document.close();
+  };
+})();
+
+/* ===== exports + bulk surplus search ===== */
+const MON=(a,f)=>a.reduce((x,l)=>x+(+l.qty||0)*(+l.price||0)*(f?(+l.mo||0):1),0);
+function regExport(kind){const info=window.__regInfo||[];if(!info.length)return toast('Nothing to export');
+ const cols=[{h:'#',g:(x,i)=>i+1,t:'t'},{h:'PR No',g:x=>x.p.no,t:'t'},{h:'Date',g:x=>x.p.date||'',t:'t'},{h:'Project',g:x=>x.p.project||'',t:'t'},{h:'Director',g:x=>x.p.od||'',t:'t'},{h:'Plant',g:x=>x.p.plant||'',t:'t'},{h:'Months',g:x=>x.p.months||0,t:'z'},{h:'Source',g:x=>x.ts.map(k=>SL[k]).join(', '),t:'t'},{h:'Requested',g:x=>x.rq,t:'i',s:true},{h:'Delivered',g:x=>x.dv,t:'i',s:true},{h:'Returned',g:x=>x.rt,t:'i',s:true},{h:'On site',g:x=>x.bal,t:'i',s:true},{h:'Shortage',g:x=>x.sh,t:'z',s:true},{h:'Per month (EGP)',g:x=>MON(x.al),t:'m',s:true},{h:'Total (EGP)',g:x=>MON(x.al,1),t:'m',s:true},{h:'Status',g:x=>x.p.closed?'Closed':'Active',t:'t'}];
+ hacPdfTable({title:'HAC \u00b7 PMV \u2014 Scaffolding PR Register',sub:(PSEL==='All'?'All projects':PSEL)+' \u00b7 '+RS,cols,rows:info,kpis:[{label:'PRs',value:info.length},{label:'Requested',value:N(info.reduce((a,x)=>a+x.rq,0))},{label:'Delivered',value:N(info.reduce((a,x)=>a+x.dv,0))},{label:'Per month (EGP)',value:N(info.reduce((a,x)=>a+MON(x.al),0))},{label:'Total (EGP)',value:N(info.reduce((a,x)=>a+MON(x.al,1),0))}]},kind)}
+function dashExport(kind){const rows=window.__dashPrl||[];if(!rows.length)return toast('Nothing to export');
+ const cols=[{h:'#',g:(e,i)=>i+1,t:'t'},{h:'PR No',g:e=>e.p.no,t:'t'},{h:'Date',g:e=>e.p.date||'',t:'t'},{h:'Project',g:e=>e.p.project||'',t:'t'},{h:'Director',g:e=>e.p.od||'',t:'t'},{h:'Months',g:e=>[...e.mo].sort((a,b)=>a-b).join(', '),t:'t'},{h:'Source',g:e=>[...e.s].map(x=>SL[x]).join(', '),t:'t'},{h:'Qty',g:e=>e.q,t:'i',s:true},{h:'Per month (EGP)',g:e=>e.m,t:'m',s:true},{h:'Total (EGP)',g:e=>e.t,t:'m',s:true},{h:'Status',g:e=>e.p.closed?'Closed':'Active',t:'t'}];
+ const a=[DF.mo!=='All'&&dMo(+DF.mo),DF.od!=='All'&&DF.od,DF.pj!=='All'&&DF.pj,DF.src!=='All'&&SL[DF.src]].filter(Boolean);
+ hacPdfTable({title:'HAC \u00b7 PMV \u2014 Scaffolding Dashboard (PR breakdown)',sub:a.length?a.join(' \u00b7 '):'All PRs',cols,rows,kpis:[{label:'PRs',value:rows.length},{label:'Qty',value:N(rows.reduce((x,e)=>x+e.q,0))},{label:'Per month (EGP)',value:N(rows.reduce((x,e)=>x+e.m,0))},{label:'Total (EGP)',value:N(rows.reduce((x,e)=>x+e.t,0))}]},kind)}
+/* surplus (idle balance of closed PRs) in OTHER projects vs the open requests; the project holding the most surplus comes first */
+let BK={only:true};
+function bulkRows(){const ix=idxDL(),im=idleMap(),out=[];Object.values(PRS).filter(p=>!p.closed).forEach(p=>{allocPR(p,ix).forEach(l=>{if(!(l.left>0)||!['TBD','Rental'].includes(l.src))return;const e=im[l.code],from=e?Object.entries(e.by).filter(x=>x[0]!==(p.project||'-')&&x[1]>0).sort((a,b)=>b[1]-a[1]):[],avail=from.reduce((a,x)=>a+x[1],0);out.push({p,code:l.code,name:(MD[l.code]||{}).name||l.name||'',need:l.left,src:l.src,avail,from,cover:avail>=l.left?'Full':avail>0?'Partial':'None'})})});
+ return out.sort((a,b)=>((b.from[0]||[0,0])[1]-(a.from[0]||[0,0])[1])||b.avail-a.avail)}
+const bulkShown=()=>bulkRows().filter(r=>!BK.only||r.avail>0);
+function bulkOpen(){let m=$('bkm');if(!m){m=document.createElement('div');m.className='modal';m.id='bkm';m.onclick=e=>{if(e.target===m)m.remove()};document.body.appendChild(m)}bulkDraw()}
+function bulkDraw(){const m=$('bkm');if(!m)return;const all=bulkRows(),rs=all.filter(r=>!BK.only||r.avail>0),c=k=>all.filter(r=>r.cover===k).length;
+ m.innerHTML=`<div class="box" style="width:min(1150px,100%);max-height:92vh;overflow:auto"><h3>Bulk surplus search</h3><div class="sub" style="margin:6px 0 10px">Open requests that are still <b>To decide</b> or <b>Rental</b>, checked against the <b>surplus (idle balance)</b> sitting in other projects. Each row lists the projects holding surplus, <b>largest first</b>.</div>
+ <div class="tools" style="margin-bottom:10px"><span class="mu">Requests checked <b>${all.length}</b></span><span style="color:var(--gr)">Fully covered <b>${c('Full')}</b></span><span style="color:var(--ac)">Partly covered <b>${c('Partial')}</b></span><span class="mu">No surplus <b>${c('None')}</b></span><label style="margin-left:12px"><input type="checkbox" ${BK.only?'checked':''} onchange="BK.only=this.checked;bulkDraw()"> only requests with surplus available</label><span style="flex:1"></span><button class="sm" onclick="bulkExport('xlsx')">&#8681; Excel</button><button class="sm" onclick="bulkExport('pdf')">PDF</button><button class="sm" onclick="$('bkm').remove()">Close</button></div>
+ <div class="tw"><table><tr><th>PR</th><th>Requesting project</th><th>Item</th><th class="n">Needed</th><th class="n">Surplus elsewhere</th><th>Coverage</th><th>Surplus by project (largest first)</th></tr>${rs.map(r=>`<tr><td><b>${E(r.p.no)}</b></td><td>${E(r.p.project||'-')}</td><td><b>${E(r.code)}</b><div class="sub">${E(r.name)}</div></td><td class="n">${N(r.need)}</td><td class="n"><b>${N(r.avail)}</b></td><td><span style="color:${r.cover==='Full'?'var(--gr)':r.cover==='Partial'?'var(--ac)':'var(--mu)'}">${r.cover}</span></td><td>${r.from.slice(0,6).map((x,i)=>`<span style="${i?'':'font-weight:700;color:var(--ac)'}">${E(x[0])} ${N(x[1])}</span>`).join(' &middot; ')||'<span class="sub">-</span>'}${r.from.length>6?' <span class="sub">+'+(r.from.length-6)+' more</span>':''}</td></tr>`).join('')||'<tr><td colspan="7" class="sub">No open request can be covered from surplus right now.</td></tr>'}</table></div></div>`}
+function bulkExport(kind){const rows=bulkShown();if(!rows.length)return toast('Nothing to export');
+ const cols=[{h:'#',g:(r,i)=>i+1,t:'t'},{h:'PR No',g:r=>r.p.no,t:'t'},{h:'Requesting project',g:r=>r.p.project||'',t:'t'},{h:'Director',g:r=>r.p.od||'',t:'t'},{h:'Item code',g:r=>r.code,t:'t'},{h:'Item',g:r=>r.name,t:'t'},{h:'Source now',g:r=>SL[r.src],t:'t'},{h:'Needed',g:r=>r.need,t:'i',s:true},{h:'Surplus elsewhere',g:r=>r.avail,t:'i',s:true},{h:'Coverage',g:r=>r.cover,t:'t'},{h:'Largest surplus project',g:r=>r.from[0]?r.from[0][0]:'',t:'t'},{h:'Its surplus',g:r=>r.from[0]?r.from[0][1]:0,t:'z',s:true},{h:'All projects with surplus (largest first)',g:r=>r.from.map(x=>x[0]+' '+x[1]).join(' \u00b7 '),t:'t'}];
+ hacPdfTable({title:'HAC \u00b7 PMV \u2014 Scaffolding Surplus Search',sub:'open requests vs surplus in other projects',cols,rows,kpis:[{label:'Requests',value:rows.length},{label:'Fully covered',value:rows.filter(r=>r.cover==='Full').length},{label:'Partly covered',value:rows.filter(r=>r.cover==='Partial').length}]},kind)}
+
 /* ============ access control (same model as the equipment portal): admin / viewer, live viewers, access log, kick ============ */
 const ADMINS=['magdygaperarqam@gmail.com'],KICK_MIN=60;let ISADMIN=true,VSID=null,VPING=null,VLIST=[],VTAB='live';
 {const st=document.createElement('style');const hide=['delPR','editPR','setClosed','delDoc','distOpen','moveOut','reasOpen','startDoc'].map(f=>`body.is-viewer [onclick*="${f}("]`).join(',');
- st.textContent=`body.is-viewer .dv,body.is-viewer #n-dr,body.is-viewer #n-trn,body.is-viewer #n-po,body.is-viewer #n-pn,body.is-viewer #n-TBD,body.is-viewer #n-idle,body.is-viewer #n-Owned,body.is-viewer #n-Asset,body.is-viewer #n-Rental,body.is-viewer #n-md,body.is-viewer #n-imp,${hide}{display:none!important}body.is-viewer select[onchange*="setLineSrc"]{pointer-events:none;opacity:.7}`;document.head.appendChild(st)}
+ st.textContent=`body.is-viewer .dv,body.is-viewer #n-dr,body.is-viewer #n-trn,body.is-viewer #n-po,body.is-viewer #n-pn,body.is-viewer #n-TBD,body.is-viewer #n-idle,body.is-viewer #n-Owned,body.is-viewer #n-Asset,body.is-viewer #n-Rental,body.is-viewer #n-md,body.is-viewer #n-imp,body.is-viewer #n-dash,body.is-viewer #n-reg,body.is-viewer .top .sm,body.is-viewer #gp,${hide}{display:none!important}body.is-viewer select[onchange*="setLineSrc"]{pointer-events:none;opacity:.7}.vpb{display:none;align-items:center;gap:6px;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.4);color:var(--gr);padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis}.vpb:hover{background:rgba(63,185,80,.2)}.vdot{width:7px;height:7px;border-radius:50%;background:var(--gr);box-shadow:0 0 6px var(--gr);animation:vpulse 1.5s infinite;flex:none}@keyframes vpulse{0%{transform:scale(.9);opacity:.7}50%{transform:scale(1.3);opacity:1}100%{transform:scale(.9);opacity:.7}}@media(max-width:760px){#vlog{font-size:0;padding:6px 9px}#vlog::before{content:'\\1F465';font-size:13px}#vrole{display:none}.vpb{max-width:110px}}`;document.head.appendChild(st)}
 const vdev=()=>innerWidth<=860?'Mobile':'Desktop';
 const kickLeft=()=>{try{return(+localStorage.getItem('hac_kick_until')||0)-Date.now()}catch(e){return 0}};
 function lockScreen(){let e=$('hlock');if(!e){e=document.createElement('div');e.id='hlock';e.style.cssText='position:fixed;inset:0;z-index:2147483000;background:#0d1117;color:#e6edf3;display:flex;align-items:center;justify-content:center;text-align:center;font-family:Arial,sans-serif';document.body.appendChild(e)}
@@ -112,8 +374,8 @@ function vStart(name){if(!VSID)VSID='v_'+Math.random().toString(36).slice(2,11);
 function vAsk(){const d=document.createElement('div');d.className='modal';d.id='vname';d.innerHTML='<div class="box" style="width:min(380px,100%);text-align:center"><div style="color:var(--ac);letter-spacing:3px;font-size:12px">HAC &middot; PMV</div><h3>Welcome, Team Member!</h3><div class="sub" style="margin:8px 0 14px">Please enter your full name to continue:</div><input id="vni" placeholder="e.g. Eng. Ahmed Mostafa" style="text-align:center;font-weight:600"><div class="tools" style="margin-top:14px;justify-content:center"><button class="btn" onclick="vSubmit()">Continue</button></div></div>';document.body.appendChild(d);$('vni').focus();$('vni').onkeydown=e=>{if(e.key==='Enter')vSubmit()}}
 function vSubmit(){const n=$('vni').value.trim().slice(0,60);if(!n)return;sessionStorage.setItem('viewer_name',n);$('vname').remove();vStart(n);const now=new Date();
  firebase.firestore().collection('viewer_access_logs').add({name:n,device:vdev(),date:now.toISOString().split('T')[0],time:now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),timestamp:Date.now(),createdAt:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});toast('Welcome, '+n)}
-function vAdmin(){const fs=firebase.firestore();if(!$('vpb')){const b=document.createElement('div');b.id='vpb';b.style.cssText='position:fixed;top:10px;right:14px;z-index:150;display:flex;gap:8px;align-items:center';b.innerHTML='<span id="vpt" onclick="vOpen(\'live\')" style="display:none;cursor:pointer;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.4);color:var(--gr);padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600"></span><button class="sm" onclick="vOpen(\'history\')">&#128101; Viewers log</button>';document.body.appendChild(b)}
- fs.collection('active_viewers').onSnapshot(sn=>{const now=Date.now();VLIST=[];sn.forEach(d=>{const x=d.data();if(now-(x.lastSeen||0)<60000)VLIST.push({id:d.id,...x});else d.ref.delete().catch(()=>{})});const t=$('vpt');t.style.display=VLIST.length?'inline-flex':'none';t.textContent='\u25CF '+(VLIST.length===1?(VLIST[0].name||'Viewer')+' online':VLIST.length+' viewers online');if($('vmod')&&VTAB==='live')vRender()},()=>{})}
+function vAdmin(){const fs=firebase.firestore();if(!$('vpt')){const gp=$('gp'),a=document.createElement('span');a.id='vpt';a.className='vpb';a.onclick=()=>vOpen('live');const b=document.createElement('button');b.id='vlog';b.className='sm';b.style.cssText='color:var(--ac);border-color:rgba(240,165,0,.4)';b.innerHTML='&#128101; Viewers log';b.onclick=()=>vOpen('history');gp.before(a);gp.before(b)}
+ fs.collection('active_viewers').onSnapshot(sn=>{const now=Date.now();VLIST=[];sn.forEach(d=>{const x=d.data();if(now-(x.lastSeen||0)<60000)VLIST.push({id:d.id,...x});else d.ref.delete().catch(()=>{})});const t=$('vpt');t.style.display=VLIST.length?'inline-flex':'none';t.innerHTML='<i class="vdot"></i>'+E(VLIST.length===1?(VLIST[0].name||'Viewer')+' online':VLIST.length+' viewers online');if($('vmod')&&VTAB==='live')vRender()},()=>{})}
 async function vOpen(tab){VTAB=tab;let m=$('vmod');if(!m){m=document.createElement('div');m.className='modal';m.id='vmod';m.onclick=e=>{if(e.target===m)m.remove()};document.body.appendChild(m)}
  m.innerHTML=`<div class="box" style="width:min(560px,100%);max-height:88vh;overflow:auto"><h3>Team viewers</h3><div class="tools" style="margin:10px 0"><button class="sm" style="${tab==='live'?'border-color:var(--ac);color:var(--ac)':''}" onclick="vOpen('live')">Online now (${VLIST.length})</button><button class="sm" style="${tab==='history'?'border-color:var(--ac);color:var(--ac)':''}" onclick="vOpen('history')">Access history</button><span style="flex:1"></span>${tab==='history'?'<button class="sm dg" onclick="vClear()">Clear history</button>':''}<button class="sm" onclick="$(\'vmod\').remove()">Close</button></div><div id="vbody" style="display:flex;flex-direction:column;gap:8px"></div></div>`;
  if(tab==='live')vRender();else{$('vbody').innerHTML='<div class="sub">Loading...</div>';try{const sn=await firebase.firestore().collection('viewer_access_logs').orderBy('timestamp','desc').limit(100).get();$('vbody').innerHTML=sn.docs.map(d=>{const h=d.data();return`<div class="card" style="margin:0;display:flex;justify-content:space-between"><div><b>${E(h.name||'Viewer')}</b><div class="sub">${E(h.date||'')} &middot; ${E(h.time||'')}</div></div><span class="sub">${h.device==='Mobile'?'Mobile':'Desktop'}</span></div>`}).join('')||'<div class="sub">No access logs yet.</div>'}catch(e){$('vbody').innerHTML='<div class="sub err">Could not load the history (check the Firestore rules).</div>'}}}
@@ -126,7 +388,7 @@ async function initDB(){
   $('mode').textContent='LIVE';$('mode').title='Firestore - shared, real-time';$('mode').className='mode live';
   await new Promise(r=>au.onAuthStateChanged(u=>{if(u){$('login').style.display='none';r()}else{$('login').style.display='block';$('app').style.display='none'}}));
   if(kickLeft()>0){lockScreen();await new Promise(()=>{})}
-  ISADMIN=ADMINS.includes((au.currentUser||{}).email);document.body.classList.toggle('is-viewer',!ISADMIN);
+  ISADMIN=ADMINS.includes((au.currentUser||{}).email);document.body.classList.toggle('is-viewer',!ISADMIN);if(!ISADMIN)PAGE='new';{const r=document.createElement('span');r.className='mode';r.id='vrole';r.textContent=ISADMIN?'Admin':'Viewer';if(ISADMIN){r.style.color='var(--ac)';r.style.borderColor='var(--ac)'}$('mode').after(r)}
   if(ISADMIN)vAdmin();else{const vn=sessionStorage.getItem('viewer_name');vn?vStart(vn):vAsk()}
   const fe=e=>{toast(e.code==='permission-denied'?'Permission denied - add the Firestore rules for the fs_* collections (see notes), or sign in with an allowed user':(e.message||String(e)));throw e};
   DB={set:(c,id,o)=>fs.collection(c).doc(id).set(o).catch(fe),del:(c,id)=>fs.collection(c).doc(id).delete().catch(fe),
@@ -450,9 +712,9 @@ async function savePR(){let ls=F.lines.filter(l=>l.code&&+l.qty>0);{const g={};l
  ops.push(['s','fs_pr',id,{areas:F.areas||[],months:+F.months||0,no,date:F.date,project:F.project.trim(),od:pj.od||'',plant:pj.plant||'',psap:pj.sap||'',group:F.group,n:ls.length,by:(window.firebase&&firebase.apps.length&&firebase.auth().currentUser)?firebase.auth().currentUser.email:'local',closed:!!(PRS[id]&&PRS[id].closed),...(PRS[id]&&PRS[id].cl?{cl:PRS[id].cl}:{}),at:Date.now()}]);await DB.batch(ops);
  const c=s=>ls.filter(l=>(l.src||'TBD')===s).length;toast('PR '+no+' saved: '+SRC.map(s=>c(s)?c(s)+' '+SL[s]:'').filter(Boolean).join(', '));F=blank();draw()}
 /* ================= register + sheets ================= */
-function reg(){const ix=idxDL(),info=Object.values(PRS).filter(p=>PSEL==='All'||p.project===PSEL).map(p=>{const al=allocPR(p,ix),ts=SRC.filter(s=>al.some(l=>l.src===s)),rq=al.reduce((a,l)=>a+l.qty,0),dv=ix.D[p.no]||0,rt=ix.R[p.no]||0,bal=Object.values(balOf(p.no)).reduce((a,x)=>a+Math.max(0,x),0),sh=al.reduce((a,l)=>a+(clOf(p,l.src,'D')?0:l.left),0),delOpen=al.some(l=>!clOf(p,l.src,'D')&&l.left>0),retOpen=al.some(l=>!clOf(p,l.src,'R')&&l.on>0);return{p,al,ts,rq,dv,rt,bal,sh,delOpen,retOpen}}).filter(x=>RS==='All'||(RS==='Active'&&!x.p.closed)||(RS==='Closed'&&x.p.closed)||(RS==='Delivery open'&&x.delOpen)||(RS==='Return open'&&x.retOpen)).sort((a,b)=>(b.p.date||'').localeCompare(a.p.date||'')||b.p.at-a.p.at);
+function reg(){const ix=idxDL(),info=Object.values(PRS).filter(p=>PSEL==='All'||p.project===PSEL).map(p=>{const al=allocPR(p,ix),ts=SRC.filter(s=>al.some(l=>l.src===s)),rq=al.reduce((a,l)=>a+l.qty,0),dv=ix.D[p.no]||0,rt=ix.R[p.no]||0,bal=Object.values(balOf(p.no)).reduce((a,x)=>a+Math.max(0,x),0),sh=al.reduce((a,l)=>a+(clOf(p,l.src,'D')?0:l.left),0),delOpen=al.some(l=>!clOf(p,l.src,'D')&&l.left>0),retOpen=al.some(l=>!clOf(p,l.src,'R')&&l.on>0);return{p,al,ts,rq,dv,rt,bal,sh,delOpen,retOpen}}).filter(x=>RS==='All'||(RS==='Active'&&!x.p.closed)||(RS==='Closed'&&x.p.closed)||(RS==='Delivery open'&&x.delOpen)||(RS==='Return open'&&x.retOpen)).sort((a,b)=>(b.p.date||'').localeCompare(a.p.date||'')||b.p.at-a.p.at);window.__regInfo=info;
   return`<div class="bar"><h1>PR Register<small>${info.length} PRs &middot; close each source separately: <b>Del</b> = Delivery, <b>Ret</b> = Return &mdash; or untick <b>Active</b> to close the whole PR</small></h1></div>
-  <div class="tools"><div class="chips">${['All','Active','Closed','Delivery open','Return open'].map(x=>`<button class="${x===RS?'on':''}" onclick="RS='${x}';draw()">${x}</button>`).join('')}</div><span class="lg"><span class="seg"><span class="sb"><i></i>Del</span></span> active <span class="seg"><span class="sb off">${CHK}Del</span></span> closed &nbsp;&middot;&nbsp; Del = Delivery &middot; Ret = Return &middot; click to switch</span></div>
+  <div class="tools"><div class="chips">${['All','Active','Closed','Delivery open','Return open'].map(x=>`<button class="${x===RS?'on':''}" onclick="RS='${x}';draw()">${x}</button>`).join('')}</div><button class="sm" onclick="regExport('xlsx')">&#8681; Excel</button><button class="sm" onclick="regExport('pdf')">PDF</button><button class="sm" style="color:var(--ac);border-color:rgba(240,165,0,.4)" onclick="bulkOpen()" title="Check open requests against the surplus in other projects">&#128269; Bulk surplus search</button><span class="lg"><span class="seg"><span class="sb"><i></i>Del</span></span> active <span class="seg"><span class="sb off">${CHK}Del</span></span> closed &nbsp;&middot;&nbsp; Del = Delivery &middot; Ret = Return &middot; click to switch</span></div>
   <div class="tw"><table><tr><th>Active</th><th>PR No</th><th>Date</th><th>Project</th><th>Group</th><th class="n">Requested</th><th class="n">Delivered</th><th class="n">Returned</th><th class="n">On site</th><th class="n">Shortage</th><th>Fill</th><th>Sources &middot; Delivery / Return</th><th></th></tr>`+
   info.map(x=>{const p=x.p,f=x.rq?Math.min(1,x.dv/x.rq):0;return`<tr style="${p.closed?'opacity:.7':''}"><td><input type="checkbox" ${p.closed?'':'checked'} onchange="setClosed('${Q(p.id)}',!this.checked)" title="Active"></td><td><b class="lk" onclick="openPR('${Q(p.id)}')">${E(p.no)}</b></td><td>${D(p.date)}</td><td>${E(p.project)}</td><td>${E(p.group)}</td><td class="n">${N(x.rq)}</td><td class="n">${N(x.dv)}</td><td class="n">${N(x.rt)}</td><td class="n">${N(x.bal)}</td><td class="n ${x.sh?'err':''}">${p.closed?'<span class="tg Closed">Closed</span>':N(x.sh)}</td><td>${Math.round(f*100)}%</td><td>${x.ts.map(s=>`<span class="trk"><span class="seg"><span class="tg ${s}">${SL[s]} ${x.al.filter(l=>l.src===s).length}</span>${dot(p,s,'D')}${dot(p,s,'R')}</span></span>`).join('')}${p.closed&&x.bal?`<span class="tg Partial">Idle ${N(x.bal)}</span>`:''}</td><td><button class="sm" onclick="openPR('${Q(p.id)}')">Open</button> <button class="sm" onclick="editPR('${Q(p.id)}')">Edit</button> <button class="sm dg" onclick="delPR('${Q(p.id)}')">Delete</button></td></tr>`}).join('')+'</table></div>'}
 /* Recoverable copy of deleted PRs/documents goes to the fs_trash collection. OFF by default so the app only touches the collections your current Firestore rules already allow. Set to true after the fs_trash rule is published. */
@@ -590,15 +852,15 @@ function dash(){const all=dashRows(),rs=all.filter(r=>dOk(r)),T=dSum(rs);
  const tbl=(title,list,fk,lab)=>{const mx=Math.max(0,...list.map(e=>e.t));return`<div class="card" style="flex:1;min-width:300px"><div class="sub" style="font-size:11px;letter-spacing:1px;margin-bottom:6px"><b>${title}</b> <span style="opacity:.6">&middot; click a row to filter</span></div><div class="tw"><table><tr><th></th><th class="n">PRs</th><th class="n">Per month</th><th class="n">Total</th><th></th></tr>${list.map(e=>`<tr style="cursor:pointer;${String(DF[fk])===String(e.k)?'background:var(--s3)':''}" onclick="DF.${fk}=String(DF.${fk})==='${Q(e.k)}'?'All':'${Q(e.k)}';draw()"><td><b>${E(lab(e.k))}</b></td><td class="n">${e.prs.size}</td><td class="n">${N(e.m)}</td><td class="n"><b>${N(e.t)}</b></td><td>${bar(e.t,mx)}</td></tr>`).join('')||'<tr><td colspan="5" class="sub">No data</td></tr>'}</table></div></div>`};
  const byMo=dAgg(all.filter(r=>dOk(r,'mo')),r=>r.mo).sort((a,b)=>a.k-b.k),byPj=dAgg(all.filter(r=>dOk(r,'pj')),r=>r.p.project||'-').sort((a,b)=>b.t-a.t),byOd=dAgg(all.filter(r=>dOk(r,'od')),r=>r.p.od||'-').sort((a,b)=>b.t-a.t);
  const prl=Object.values(rs.reduce((o,r)=>{const e=o[r.p.id]=o[r.p.id]||{p:r.p,q:0,m:0,t:0,s:new Set(),mo:new Set()};e.q+=r.q;e.m+=r.m;e.t+=r.t;e.s.add(r.s);e.mo.add(r.mo);return o},{})).sort((a,b)=>(b.p.date||'').localeCompare(a.p.date||'')||(b.p.at||0)-(a.p.at||0));
- const srcCards=['Rental','Owned','Asset','TBD'].map(x=>{const a=dSum(all.filter(r=>dOk(r,'src')&&r.s===x));return card(SL[x],N(a.m)+' <span style="font-size:11px;opacity:.7">EGP / month</span>',`Total <b>${N(a.t)}</b> EGP &middot; ${a.n} PRs &middot; ${N(a.q)} qty`,DCOL[x],`DF.src=DF.src==='${x}'?'All':'${x}';draw()`,DF.src===x)}).join('');
+ window.__dashPrl=prl;const srcCards=['Rental','Owned','Asset','TBD'].map(x=>{const a=dSum(all.filter(r=>dOk(r,'src')&&r.s===x));return card(SL[x],N(a.m)+' <span style="font-size:11px;opacity:.7">EGP / month</span>',`Total <b>${N(a.t)}</b> EGP &middot; ${a.n} PRs &middot; ${N(a.q)} qty`,DCOL[x],`DF.src=DF.src==='${x}'?'All':'${x}';draw()`,DF.src===x)}).join('');
  const act=[DF.mo!=='All'&&dMo(+DF.mo),DF.od!=='All'&&DF.od,DF.pj!=='All'&&DF.pj,DF.src!=='All'&&SL[DF.src]].filter(Boolean);
  return`<div class="bar"><h1>Dashboard<small>Scaffolding requests by source, value and duration &mdash; click any card or row to filter, then open a PR from the list</small></h1></div>
- <div class="hd" style="margin-bottom:12px">${sel('Duration','mo',[...new Set(all.map(r=>r.mo))].sort((a,b)=>a-b),v=>dMo(+v))}${sel('Director','od',[...new Set(all.map(r=>r.p.od||'-'))].sort())}${sel('Project','pj',[...new Set(all.map(r=>r.p.project||'-'))].sort())}<div><label>&nbsp;</label><button class="sm" onclick="DF={mo:'All',od:'All',pj:'All',src:'All'};draw()">Reset filters</button></div></div>
+ <div class="hd" style="margin-bottom:12px">${sel('Duration','mo',[...new Set(all.map(r=>r.mo))].sort((a,b)=>a-b),v=>dMo(+v))}${sel('Director','od',[...new Set(all.map(r=>r.p.od||'-'))].sort())}${sel('Project','pj',[...new Set(all.map(r=>r.p.project||'-'))].sort())}<div><label>&nbsp;</label><button class="sm" onclick="DF={mo:'All',od:'All',pj:'All',src:'All'};draw()">Reset filters</button></div><div><label>&nbsp;</label><button class="sm" onclick="dashExport('xlsx')">&#8681; Excel</button> <button class="sm" onclick="dashExport('pdf')">PDF</button></div></div>
  <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">${card('PRs',N(T.n),act.length?'filtered: '+E(act.join(' · ')):'all PRs &middot; click to see the list','var(--bl)',"document.getElementById('dpl').scrollIntoView({behavior:'smooth'})")}${card('Quantity',N(T.q),'items requested','var(--tx)',"document.getElementById('dpl').scrollIntoView({behavior:'smooth'})")}${card('Price by month',N(T.m)+' <span style="font-size:11px;opacity:.7">EGP</span>','all lines together','var(--ac)',"")}${card('By duration',N(T.t)+' <span style="font-size:11px;opacity:.7">EGP</span>','qty &times; price &times; months','var(--ac)',"")}</div>
  <div class="sub" style="font-size:11px;letter-spacing:1px;margin:14px 0 6px"><b>BY SOURCE</b> <span style="opacity:.6">&middot; click to filter</span></div><div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">${srcCards}</div>
  <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">${tbl('BY DURATION',byMo,'mo',k=>dMo(+k))}${tbl('BY PROJECT',byPj,'pj',k=>k)}${tbl('BY DIRECTOR',byOd,'od',k=>k)}</div>
  <div class="card" id="dpl"><div class="sub" style="font-size:11px;letter-spacing:1px;margin-bottom:6px"><b>PR BREAKDOWN</b> &middot; ${prl.length} PRs${act.length?' &middot; '+E(act.join(' · ')):''}</div><div class="tw"><table><tr><th>PR</th><th>Date</th><th>Project</th><th>Director</th><th class="n">Months</th><th>Source</th><th class="n">Qty</th><th class="n">Per month</th><th class="n">Total</th><th>Status</th></tr>${prl.slice(0,300).map(e=>`<tr style="cursor:pointer" onclick="openPR('${Q(e.p.id)}')"><td><b>${E(e.p.no)}</b></td><td class="mu">${E(e.p.date||'')}</td><td>${E(e.p.project||'-')}</td><td class="mu">${E(e.p.od||'-')}</td><td class="n">${[...e.mo].sort((a,b)=>a-b).map(m=>m||'-').join(', ')}</td><td>${[...e.s].map(x=>`<span class="tg ${x}">${SL[x]}</span>`).join(' ')}</td><td class="n">${N(e.q)}</td><td class="n">${N(e.m)}</td><td class="n"><b>${N(e.t)}</b></td><td>${e.p.closed?'<span class="sub">Closed</span>':'<span style="color:var(--gr)">Active</span>'}</td></tr>`).join('')||'<tr><td colspan="10" class="sub">No PRs match these filters</td></tr>'}</table></div>${prl.length>300?'<div class="sub">Showing the latest 300 &mdash; narrow the filters to see the rest.</div>':''}</div>`}
-function go(p){if(!ISADMIN&&!['dash','new','reg','prd'].includes(p))return toast('Admin only');PAGE=p;if(p==='md')MDT=MDT||'items';if(FORMS.includes(p)&&G.page!==p)G=blankDoc(p);QS='';MQ='';if(p==='new'&&!F.id&&0)F=blank();draw();scrollTo(0,0)}
+function go(p){if(!ISADMIN&&p!=='new')return toast('Admin only');PAGE=p;if(p==='md')MDT=MDT||'items';if(FORMS.includes(p)&&G.page!==p)G=blankDoc(p);QS='';MQ='';if(p==='new'&&!F.id&&0)F=blank();draw();scrollTo(0,0)}
 function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',4500)}
 (async()=>{await initDB();$('app').style.display='flex';DB.start();draw()})();
 </script></body></html>
