@@ -167,8 +167,8 @@ tr.t td{font-weight:700;background:var(--s2);color:var(--ac)}
 .drh h3 small{display:block;font:500 10.5px 'JetBrains Mono';color:var(--dim);direction:ltr}
 .drb{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
 .sec{font:800 11px Cairo;color:var(--ac);letter-spacing:.5px;margin-bottom:7px}
-.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.fl label{display:block;font:700 10px Tajawal;color:var(--mu);margin-bottom:3px}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}@media(max-width:520px){.fg{grid-template-columns:1fr}}
+.fl label{display:block;font:700 12px Tajawal;color:#b6c0cb;margin-bottom:4px}.drawer input,.drawer select{font-size:14px;padding:9px 11px;min-height:40px;background:#0d1117;border-color:#3d444d}.drawer .sec{font-size:12.5px}.drawer .impTab{font-size:12.5px;padding:7px 13px}
 .drf{flex:none;padding:11px 16px;border-top:1px solid var(--bd);background:var(--s2);display:flex;gap:7px;flex-wrap:wrap}
 .note{background:var(--bg);border-right:3px solid var(--ac);border-radius:7px;padding:8px 11px;font-size:12px;color:var(--mu);line-height:1.7}
 .note.rd{border-color:var(--rd)}.note.gr{border-color:var(--gr)}
@@ -277,6 +277,7 @@ tr.t td{font-weight:700;background:var(--s2);color:var(--ac)}
         <select id="gs" onchange="GSRC=this.value;render()"><option value="">كل المصادر</option><option>TBD</option><option>Owned</option><option>Rental</option><option>Asset</option></select>
         <div class="tin"><input id="q" placeholder="بحث: PR / بند / مشروع…" oninput="QS=this.value;render()"></div>
         <button class="btn sm" id="newBtn" onclick="openNew()">+ PR جديد</button>
+        <button class="btn sm" id="docBtn" onclick="openDoc('dlv')">+ مستند</button>
         <button class="btn sm" onclick="expCSV()">تصدير CSV</button>
         <button class="btn sm p" onclick="openImport()">⇪ رفع شيتات</button>
         <button class="btn sm" onclick="expExcel()">⬇ Excel كامل</button>
@@ -334,8 +335,23 @@ const me=()=>(au.currentUser||{}).email||'local';
 const canWrite=()=>ISADMIN,canCreatePR=()=>ISADMIN||!!MYPROJ;
 
 /* ===== نفس معادلات ملفك بالحرف ===== */
-const clOf=(p,s,ph)=>p.cl?!!p.cl[s+'_'+ph]:!!p.closed;
-function syncClosed(){Object.values(PRS).forEach(p=>{if(!p.cl)return;const t=TRK[p.id];if(t&&t.size)p.closed=[...t].every(s=>PH.every(h=>p.cl[s+'_'+h]))})}
+const clOf=(p,s,ph)=>p.cl?!!p.cl[s+'_'+ph]:(p.lc?false:!!p.closed);
+const lcl=(p,l,ph)=>clOf(p,l.src||'TBD',ph)||!!(ph==='D'?l.clD:l.clR);
+function syncClosed(){const by={};Object.values(LN).forEach(l=>(by[l.pr]=by[l.pr]||[]).push(l));
+ Object.values(PRS).forEach(p=>{const ls=by[p.id]||[];if(!ls.length||(!p.cl&&!ls.some(l=>l.clD||l.clR)))return;p.closed=ls.every(l=>lcl(p,l,'D')&&lcl(p,l,'R'))})}
+/* قفل / فتح البنود نفسها: clD / clR على كل fs_line — والـ PR بيتقفل لوحده لما كل بنوده تتقفل */
+async function commitLineCl(p,ch,label){const ls=Object.values(LN).filter(l=>l.pr===p.id).map(l=>ch[l.id]?{...l,...ch[l.id]}:l);
+ const ops=Object.keys(ch).map(id=>{const{id:_x,...o}=LN[id];return['s','fs_line',id,{...o,...ch[id]}]});
+ const nc=ls.length>0&&ls.every(l=>lcl(p,l,'D')&&lcl(p,l,'R'));
+ if(nc!==!!p.closed||!p.lc){const{id:_y,...po}=p;ops.push(['s','fs_pr',p.id,{...po,lc:true,closed:nc,closedAt:nc?(p.closedAt||Date.now()):null}])}
+ if(await batch(ops,label))renderDr()}
+function setLineCl(lid,ph,v){const l=LN[lid],p=l&&PRS[l.pr];if(!p)return;commitLineCl(p,{[lid]:{[ph==='D'?'clD':'clR']:v}},'البند '+l.code+' · '+(ph==='D'?'Del':'Ret')+(v?' اتقفل':' اتفتح'))}
+function setAllLines(pid,ph,v){const p=PRS[pid];if(!p)return;const ch={};Object.values(LN).filter(l=>l.pr===pid&&!clOf(p,l.src||'TBD',ph)).forEach(l=>ch[l.id]={[ph==='D'?'clD':'clR']:v});
+ if(!Object.keys(ch).length)return toast('كل البنود مقفولة من المصدر — افتحه من جدول المصادر الأول');
+ commitLineCl(p,ch,(v?'قفل':'فتح')+' '+Object.keys(ch).length+' بند · '+(ph==='D'?'Del':'Ret'))}
+const lclBtn=(p,l,ph)=>{const by=clOf(p,l.src||'TBD',ph),on=by||!!(ph==='D'?l.clD:l.clR);if(!ISADMIN)return on?'✓':'—';
+ if(by)return`<button class="btn sm" disabled title="مقفول من المصدر / الـ PR — افتحه من جدول المصادر الأول">🔒</button>`;
+ return`<button class="btn sm ${on?'':'g'}" onclick="setLineCl('${E(l.id)}','${ph}',${!on})">${on?'✓ مقفول':'مفتوح'}</button>`};
 function idxDL(){const dv={},rt={},Dt={},Rt={};Object.values(DL).forEach(l=>{const d=DOC[l.doc];if(!d)return;const add=(o,k,c,q)=>{(o[k]=o[k]||{})[c]=(o[k][c]||0)+q};
 if(d.type==='dlv'||d.type==='alc'){add(dv,d.ref,l.code,l.qty);Dt[d.ref]=(Dt[d.ref]||0)+l.qty}
 if(d.type==='ret'){add(rt,d.ref,l.code,l.qty);Rt[d.ref]=(Rt[d.ref]||0)+l.qty}
@@ -378,40 +394,50 @@ const ALLOW={tbd:['decided'],decided:['po','part'],po:['part'],part:['full'],ful
 
 /* ===== الاتصال والاستماع ===== */
 function setConn(c,t,s){$('conn').className='chip '+c;$('ct').textContent=t;$('cs').textContent=s}
+let ROLEU=null;
+function applyRole(){if(MYPROJ)PSEL=MYPROJ;const r=$('role');r.textContent=ISADMIN?'Admin':MYPROJ?MYPROJ:'View only';r.className='role '+(ISADMIN?'admin':MYPROJ?'proj':'');
+ $('newBtn').disabled=!canCreatePR();$('docBtn').disabled=!ISADMIN}
 au.onAuthStateChanged(async u=>{
- if(!u){stopAll();$('login').style.display='grid';$('out').style.display='none';$('role').textContent='—';$('role').className='role';setConn('wait','محتاج دخول','sign in');return}
+ if(!u){if(ROLEU){ROLEU();ROLEU=null}stopAll();$('login').style.display='grid';$('out').style.display='none';$('role').textContent='—';$('role').className='role';setConn('wait','محتاج دخول','sign in');return}
  $('login').style.display='none';$('out').style.display='inline-flex';
  const em=(u.email||'').toLowerCase();ISADMIN=ADMINS.includes(em);MYPROJ=null;RO=false;
- if(!ISADMIN){try{const d=await fs.collection('fs_users').doc(em).get();if(d.exists&&d.data().project)MYPROJ=d.data().project;else RO=true}catch(e){RO=true}}
- if(MYPROJ)PSEL=MYPROJ;
- const r=$('role');r.textContent=ISADMIN?'Admin':MYPROJ?MYPROJ:'View only';r.className='role '+(ISADMIN?'admin':MYPROJ?'proj':'');
- $('newBtn').disabled=!canCreatePR();
+ if(ROLEU){ROLEU();ROLEU=null}
+ if(!ISADMIN){await new Promise(res=>{let first=true;ROLEU=fs.collection('fs_users').doc(em).onSnapshot(d=>{const mp=d.exists&&d.data().project?d.data().project:null,ro=!mp;
+  if(first){MYPROJ=mp;RO=ro;first=false;res();return}
+  if(mp!==MYPROJ||ro!==RO){MYPROJ=mp;RO=ro;if(!mp)PSEL='All';applyRole();restart();toast('صلاحيتك اتغيّرت — اتحدّثت لوحدها')}},()=>{if(first){RO=true;first=false;res()}})})}
+ applyRole();
  start();greet();
 });
 async function signIn(){try{await au.signInWithEmailAndPassword($('em').value.trim(),$('pw').value);$('le').textContent=''}catch(e){$('le').textContent=e.code==='auth/invalid-credential'?'البريد أو كلمة السر غلط':(e.message||e.code)}}
 function logout(){stopAll();au.signOut()}
 function stopAll(){UNSUB.forEach(u=>{try{u()}catch(e){}});UNSUB=[];DLU.forEach(u=>{try{u()}catch(e){}});DLU=[];DLK=''}
 function restart(){stopAll();MD={};VND={};PJ={};PRS={};LN={};DOC={};DL={};start();toast('أعدنا فتح قنوات الاستماع')}
+const FC={};
+function liveStatus(){const ks=Object.keys(ST).filter(c=>ST[c].s!=='idle');if(ks.some(c=>ST[c].s==='er'))return setConn('err','خطأ استماع','error');
+ if(!navigator.onLine)return setConn('err','offline — بيانات محفوظة','cache');
+ if(ks.length&&ks.every(c=>ST[c].s==='ok'&&!FC[c]))return setConn('live','متصل · لحظي','server '+new Date(LAST).toLocaleTimeString('en-GB'));
+ setConn('wait','بيتزامن مع السيرفر…','syncing')}
+window.addEventListener('online',liveStatus);window.addEventListener('offline',liveStatus);
 function start(){
  setConn('wait','بيسمع…','listening');
  const list=(ISADMIN||RO)?COLS:['fs_master','fs_project','fs_pr','fs_line',...(MYPROJ?['fs_doc']:[])];
  list.forEach(c=>{ST[c].s='ld';let r=fs.collection(c);
   if(MYPROJ&&c!=='fs_master')r=r.where(c==='fs_project'?'name':'project','==',MYPROJ);
-  UNSUB.push(r.onSnapshot(sn=>{const o={};sn.forEach(d=>o[d.id]={id:d.id,...d.data()});ST[c]={s:'ok',n:sn.size};
+  UNSUB.push(r.onSnapshot({includeMetadataChanges:true},sn=>{FC[c]=sn.metadata.fromCache;if(ST[c].s==='ok'&&!sn.docChanges().length&&ST[c].n===sn.size){if(!sn.metadata.fromCache)LAST=Date.now();liveStatus();return}const o={};sn.forEach(d=>o[d.id]={id:d.id,...d.data()});ST[c]={s:'ok',n:sn.size};
    if(c==='fs_master'){MD={};VND={};Object.values(o).forEach(m=>{if(m.kind==='vendor')VND[m.id]=m;else MD[m.id]=m})}
    if(c==='fs_project')PJ=o;
    if(c==='fs_pr')PRS=o;
    if(c==='fs_line'){LN=o;TRK={};Object.values(o).forEach(l=>{(TRK[l.pr]=TRK[l.pr]||new Set()).add(l.src||'TBD')})}
    if(c==='fs_doc'){DOC=o;if(MYPROJ)dlSub()}
    if(c==='fs_dline')DL=o;
-   syncClosed();LAST=Date.now();setConn('live','متصل · بيسمع','live');render();
+   syncClosed();if(!sn.metadata.fromCache)LAST=Date.now();liveStatus();render();
   },e=>{ST[c]={s:'er',n:0};setConn('err','خطأ استماع','error');toast(c+': '+(e.code==='permission-denied'?'القواعد رفضت القرا':e.message));render()}))});
  render();
 }
 function dlSub(){const ids=Object.keys(DOC).sort(),k=ids.join('|');if(k===DLK)return;DLK=k;
  DLU.forEach(u=>{try{u()}catch(e){}});DLU=[];if(!ids.length){DL={};render();return}
  const parts={};for(let i=0;i<ids.length;i+=30){const ch=ids.slice(i,i+30),n=i;
-  DLU.push(fs.collection('fs_dline').where('doc','in',ch).onSnapshot(sn=>{parts[n]={};sn.forEach(d=>parts[n][d.id]={id:d.id,...d.data()});DL=Object.assign({},...Object.values(parts));ST.fs_dline={s:'ok',n:Object.keys(DL).length};render()},()=>{}))}}
+  DLU.push(fs.collection('fs_dline').where('doc','in',ch).onSnapshot({includeMetadataChanges:true},sn=>{FC.fs_dline=sn.metadata.fromCache;if(parts[n]&&!sn.docChanges().length){liveStatus();return}parts[n]={};sn.forEach(d=>parts[n][d.id]={id:d.id,...d.data()});DL=Object.assign({},...Object.values(parts));ST.fs_dline={s:'ok',n:Object.keys(DL).length};liveStatus();render()},()=>{}))}}
 
 /* ===== الكتابة على Firestore الحقيقي ===== */
 async function batch(ops,label){
@@ -446,7 +472,8 @@ function render(){
  document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.m===MODE));
  ['dash','board','bal','reg','mv','ven'].forEach(m=>{const e=$(m);e.hidden=m!==MODE;e.style.display=m!==MODE?'none':((m==='board'||m==='dash')?'flex':m==='bal'?'grid':'block')});
  if(MODE==='dash')drawDash();if(MODE==='ven')drawVen();if(MODE==='board')drawBoard();if(MODE==='bal')drawBal();if(MODE==='reg')drawReg();if(MODE==='mv')drawMv();
- renderCtx();renderSugg();updateBadge();
+ renderCtx();renderSugg();
+ if(DR&&!FORM&&$('dr').classList.contains('open')){const a=document.activeElement;if(!(a&&a.tagName==='SELECT'&&a.closest('#dr'))){const b=document.querySelector('#drin .drb'),y=b?b.scrollTop:0;renderDr();const b2=document.querySelector('#drin .drb');if(b2)b2.scrollTop=y}}updateBadge();
 }
 function filtPR(){const ix=idxDL();return Object.values(PRS).filter(p=>{
  if(!inScope(p.project))return false;
@@ -454,7 +481,7 @@ function filtPR(){const ix=idxDL();return Object.values(PRS).filter(p=>{
  if(QS){const q=QS.toLowerCase();const hay=(p.no+' '+p.project+' '+(p.od||'')+' '+Object.values(LN).filter(l=>l.pr===p.id).map(l=>l.code+' '+l.name).join(' ')).toLowerCase();if(!hay.includes(q))return false}
  return true}).map(p=>({p,st:stageOf(p,ix),al:allocPR(p,ix)}))}
 function drawBoard(){const rows=filtPR();
- if(!Object.keys(PRS).length){$('board').innerHTML='<div class="empty" style="margin:auto"><b>لسه مفيش PRs في الفايربيس</b>الاستماع شغال على fs_pr — أول ما يتحفظ أي PR من ملفك الأصلي هيظهر هنا لوحده.<br><br>'+(canCreatePR()?'<button class="btn p sm" onclick="openNew()">+ اعمل أول PR</button>':'')+'</div>';return}
+ if(!Object.keys(PRS).length){$('board').innerHTML='<div class="empty" style="margin:auto"><b>لسه مفيش PRs في الفايربيس</b>الاستماع شغال على fs_pr — اعمل PR من هنا أو ارفع شيتاتك وهيظهر لوحده.<br><br>'+(canCreatePR()?'<button class="btn p sm" onclick="openNew()">+ اعمل أول PR</button>':'')+'</div>';return}
  $('board').innerHTML=STAGES.map((s,i)=>{const rs=rows.filter(r=>r.st===s.id);
   return `<div class="col" data-col="${s.id}" style="--sc:${s.c};animation-delay:${i*35}ms"><div class="col-h"><div class="r1"><b>${s.ar}</b><span class="n">${rs.length}</span></div><small>${s.en}</small></div><div class="col-b">${rs.length?rs.map((r,j)=>card(r,j)).join(''):'<div class="cole">مفيش PRs هنا</div>'}</div></div>`}).join('');
  bindDnD()}
@@ -491,7 +518,7 @@ function drawBal(){const m={};Object.values(LN).filter(l=>inScope(l.project)).fo
   <button class="btn sm" onclick="ask('كام ${E(x.code)} عندنا؟')">اسأل</button></div></div>`}).join('')}
 let CUR=[],CURH=[];
 function drawReg(){const ix=idxDL(),rows=filtPR().map(r=>{const rq=r.al.reduce((a,l)=>a+l.qty,0),dl=r.al.reduce((a,l)=>a+l.dl,0),rt=r.al.reduce((a,l)=>a+l.rt,0),on=r.al.reduce((a,l)=>a+l.on,0);
- const sh=r.al.reduce((a,l)=>a+(clOf(r.p,l.src,'D')?0:l.left),0),val=r.al.reduce((a,l)=>a+l.qty*l.price*l.mo,0);
+ const sh=r.al.reduce((a,l)=>a+(lcl(r.p,l,'D')?0:l.left),0),val=r.al.reduce((a,l)=>a+l.qty*l.price*l.mo,0);
  return{no:r.p.no,date:r.p.date,project:r.p.project,od:r.p.od||'',stage:STAGES.find(s=>s.id===r.st).ar,rq,dl,rt,on,sh,val,st:r.p.closed?'Closed':'Active',id:r.p.id}}).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
  CUR=rows;CURH=['PR','Date','Project','OD','Stage','Requested','Delivered','Returned','OnSite','Shortage','ValueEGP','Status'];
  if(!rows.length){$('reg').innerHTML='<div class="empty"><b>مفيش نتايج</b></div>';return}
@@ -510,7 +537,7 @@ function expCSV(){if(!CUR.length)return toast('مفيش بيانات');const q=s
 /* ===== الدرج ===== */
 function openPR(id){DR={id};renderDr();$('scrim').classList.add('open');$('dr').classList.add('open')}
 function closeDr(){DR=null;$('scrim').classList.remove('open');$('dr').classList.remove('open');$('dr').classList.remove('wide')}
-function renderDr(){if(!DR)return;const p=PRS[DR.id];if(!p){closeDr();return}
+function renderDr(){FORM=false;if(!DR)return;const p=PRS[DR.id];if(!p){closeDr();return}
  const ix=idxDL(),al=allocPR(p,ix),rq=al.reduce((a,l)=>a+l.qty,0),dl=al.reduce((a,l)=>a+l.dl,0),on=al.reduce((a,l)=>a+l.on,0);
  const val=al.reduce((a,l)=>a+l.qty*l.price*l.mo,0),st=STAGES.find(s=>s.id===stageOf(p,ix));
  const ds=Object.values(DOC).filter(d=>d.ref===p.no).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
@@ -525,14 +552,15 @@ function renderDr(){if(!DR)return;const p=PRS[DR.id];if(!p){closeDr();return}
  ${TR.map(t=>`<tr><td><span class="tg ${t.s}">${SL[t.s]}</span></td><td class="n">${N(t.q)}</td><td class="n">${N(t.dl)}</td><td class="n">${N(t.left)}</td>
  <td>${ISADMIN?`<button class="btn sm" onclick="setCell('${E(p.id)}','${t.s}','D',${!clOf(p,t.s,'D')})">${clOf(p,t.s,'D')?'✓ مقفول':'مفتوح'}</button>`:(clOf(p,t.s,'D')?'✓':'—')}</td>
  <td>${ISADMIN?`<button class="btn sm" onclick="setCell('${E(p.id)}','${t.s}','R',${!clOf(p,t.s,'R')})">${clOf(p,t.s,'R')?'✓ مقفول':'مفتوح'}</button>`:(clOf(p,t.s,'R')?'✓':'—')}</td></tr>`).join('')}</table></div>
- <div><div class="sec">البنود (${al.length})</div>
- <table style="min-width:0"><tr><th>البند</th><th class="n">كمية</th><th class="n">مورّد</th><th>المصدر</th></tr>
- ${al.map(l=>`<tr><td><b>${E(l.code)}</b><div style="font-size:10.5px;color:var(--dim)">${E(l.name)}</div></td><td class="n">${N(l.qty)}</td><td class="n">${N(l.dl)}</td>
- <td>${ISADMIN?`<select onchange="setLineSrc('${E(l.id)}',this.value)" style="width:110px">${SRC.map(s=>`<option value="${s}" ${l.src===s?'selected':''}>${SL[s]}</option>`).join('')}</select>`:`<span class="tg ${l.src}">${SL[l.src]}</span>`}</td></tr>`).join('')}</table></div>
+ <div><div class="sec">البنود (${al.length})${ISADMIN?` <span style="float:left;display:inline-flex;gap:4px;flex-wrap:wrap"><button class="btn sm" onclick="setAllLines('${E(p.id)}','D',true)">اقفل كل Del</button><button class="btn sm" onclick="setAllLines('${E(p.id)}','D',false)">افتح كل Del</button><button class="btn sm" onclick="setAllLines('${E(p.id)}','R',true)">اقفل كل Ret</button><button class="btn sm" onclick="setAllLines('${E(p.id)}','R',false)">افتح كل Ret</button></span>`:''}</div>
+ <table style="min-width:0"><tr><th>البند</th><th class="n">كمية</th><th class="n">مورّد</th><th>المصدر</th><th>Del</th><th>Ret</th></tr>
+ ${al.map(l=>`<tr style="${lcl(p,l,'D')&&lcl(p,l,'R')?'opacity:.55':''}"><td><b>${E(l.code)}</b><div style="font-size:10.5px;color:var(--dim)">${E(l.name)}</div></td><td class="n">${N(l.qty)}</td><td class="n">${N(l.dl)}</td>
+ <td>${ISADMIN?`<select onchange="setLineSrc('${E(l.id)}',this.value)" style="width:110px">${SRC.map(s=>`<option value="${s}" ${l.src===s?'selected':''}>${SL[s]}</option>`).join('')}</select>`:`<span class="tg ${l.src}">${SL[l.src]}</span>`}</td><td>${lclBtn(p,l,'D')}</td><td>${lclBtn(p,l,'R')}</td></tr>`).join('')}</table></div>
  ${ds.length?`<div><div class="sec">مستندات على الـ PR (${ds.length})</div><table style="min-width:0"><tr><th>التاريخ</th><th>المستند</th><th>النوع</th><th class="n">بنود</th></tr>
  ${ds.map(d=>`<tr><td>${D(d.date)}</td><td><b>${E(d.no)}</b></td><td>${TY[d.type]}</td><td class="n">${d.n||0}</td></tr>`).join('')}</table></div>`:'<div class="note">مفيش PO أو توريد أو خطة على الـ PR ده لسه.</div>'}
  </div>
  <div class="drf"><button class="btn p" onclick="ask('إيه الخطوة الجاية لـ PR ${E(p.no)}؟')">🤖 اسأل عنه</button>
+  ${ISADMIN?`<button class="btn" onclick="openEditPR('${E(p.id)}')">✎ تعديل</button>${al.some(l=>l.src==='Rental')?`<button class="btn" onclick="openDoc('po','${E(p.id)}')">+ Rental PO</button>`:''}<button class="btn" onclick="openDoc('dlv','${E(p.id)}')">+ Delivery</button><button class="btn" onclick="openDoc('ret','${E(p.id)}')">+ Return</button><button class="btn" onclick="openDoc('plan','${E(p.id)}')">+ Plan</button>`:''}
  ${ISADMIN&&!p.closed?`<button class="btn g" onclick="closePR('${E(p.id)}')">اقفل الـ PR</button>`:''}
  ${ISADMIN?`<button class="btn dg" onclick="if(confirm('حذف PR ${E(p.no)} وكل بنوده؟'))delPR('${E(p.id)}')">حذف</button>`:''}
  <span class="sp"></span><button class="btn" onclick="closeDr()">إغلاق</button></div>`}
@@ -543,22 +571,24 @@ async function closePR(id){const p=PRS[id];if(!p)return;const all={};SRC.forEach
 let NF=null;
 function openNew(){if(!canCreatePR())return toast('الإنشاء للأدمن أو حساب مشروع');
  NF={no:'',date:today(),project:MYPROJ||'',months:'',lines:[{code:'',qty:''}]};renderNew();$('scrim').classList.add('open');$('dr').classList.add('open')}
-function renderNew(){const items=Object.values(MD).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
- $('drin').innerHTML=`<div class="drh"><div class="r1"><h3>PR جديد<small>يتكتب في fs_pr + fs_line</small></h3><button class="btn sm ic" onclick="closeDr()">✕</button></div></div>
+let FORM=false;
+function renderNew(){FORM=true;const items=Object.values(MD).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+ $('drin').innerHTML=`<div class="drh"><div class="r1"><h3>${NF.id?'تعديل PR '+E(NF.no):'PR جديد'}<small>${NF.id?'بيتحدّث في fs_pr + fs_line':'يتكتب في fs_pr + fs_line'}</small></h3><button class="btn sm ic" onclick="closeDr()">✕</button></div></div>
  <div class="drb">${!items.length?'<div class="note rd">fs_master فاضي — لازم ترفع Master Data من ملفك الأول عشان تختار بنود.</div>':''}
- <div class="g2"><div class="fl"><label>رقم PR *</label><input id="n-no" value="${E(NF.no)}" oninput="NF.no=this.value" placeholder="70030000"></div>
+ <div class="fg"><div class="fl"><label>رقم PR *</label><input id="n-no" value="${E(NF.no)}" oninput="NF.no=this.value" placeholder="70030000" ${NF.id?'disabled':''}></div>
  <div class="fl"><label>التاريخ</label><input id="n-dt" type="date" value="${NF.date}" oninput="NF.date=this.value"></div>
  <div class="fl"><label>المشروع *</label>${MYPROJ?`<input value="${E(MYPROJ)}" disabled>`:`<select id="n-pj" onchange="NF.project=this.value"><option value="">اختار…</option>${Object.values(PJ).map(p=>`<option ${p.name===NF.project?'selected':''}>${E(p.name)}</option>`).join('')}</select>`}</div>
  <div class="fl"><label>المدة (شهور) *</label><input type="number" min="1" value="${E(NF.months)}" oninput="NF.months=this.value"></div></div>
  <div><div class="sec">البنود</div><div id="n-lines">${NF.lines.map((l,i)=>lineRow(l,i,items)).join('')}</div>
  <button class="btn sm" style="margin-top:7px" onclick="NF.lines.push({code:'',qty:''});renderNew()">+ بند</button></div>
  <div class="note">المصدر الافتراضي <b>To decide</b> — الأدمن بيحدده بعدين من صفحة الـ PR. ده نفس سلوك ملفك.</div></div>
- <div class="drf"><button class="btn p" style="flex:1" onclick="saveNew()">احفظ في Firestore</button><button class="btn" onclick="closeDr()">إلغاء</button></div>`}
+ <div class="drf"><button class="btn p" style="flex:1" onclick="saveNew()">${NF.id?'احفظ التعديل':'احفظ في Firestore'}</button><button class="btn" onclick="closeDr()">إلغاء</button></div>`}
 function lineRow(l,i,items){return `<div style="display:grid;grid-template-columns:1fr 90px 30px;gap:6px;margin-bottom:6px">
  <select onchange="NF.lines[${i}].code=this.value"><option value="">اختار بند…</option>${items.map(m=>`<option value="${E(m.code)}" ${m.code===l.code?'selected':''}>${E(m.code)} — ${E(m.name)}</option>`).join('')}</select>
  <input type="number" min="1" placeholder="كمية" value="${E(l.qty)}" oninput="NF.lines[${i}].qty=this.value">
  <button class="btn sm ic dg" onclick="NF.lines.splice(${i},1);if(!NF.lines.length)NF.lines=[{code:'',qty:''}];renderNew()">✕</button></div>`}
 async function saveNew(){
+ if(NF.id)return saveEditPR();
  const no=(NF.no||'').trim(),pj=MYPROJ||NF.project,mo=+NF.months||0;
  if(!no)return toast('اكتب رقم الـ PR');if(!pj)return toast('اختار المشروع');if(!mo)return toast('اكتب المدة بالشهور');
  const ls=NF.lines.filter(l=>l.code&&+l.qty>0);if(!ls.length)return toast('ضيف بند واحد على الأقل بكمية');
@@ -571,13 +601,73 @@ async function saveNew(){
  if(!ISADMIN&&MYPROJ){try{const b=fs.batch();ops.forEach(([t,c,i2,o])=>b.set(fs.collection(c).doc(i2),o));await b.commit();toast('PR '+no+' اتحفظ ✓');closeDr();return}catch(e){return toast('القواعد رفضت: '+e.message)}}
  if(await batch(ops,'PR '+no+' اتحفظ')){closeDr();ask('إيه الخطوة الجاية لـ PR '+no+'؟')}}
 
+/* ===== تعديل PR من هنا ===== */
+function openEditPR(id){if(!ISADMIN)return toast('التعديل للأدمن بس');const p=PRS[id];if(!p)return;
+ NF={id,no:p.no,date:p.date||today(),project:p.project||'',months:p.months||'',lines:Object.values(LN).filter(l=>l.pr===id).sort((a,b)=>a.sr-b.sr).map(l=>({lid:l.id,code:l.code,qty:String(l.qty)}))};
+ if(!NF.lines.length)NF.lines=[{code:'',qty:''}];renderNew();$('scrim').classList.add('open');$('dr').classList.add('open')}
+async function saveEditPR(){const p=PRS[NF.id];if(!p)return;const pj=NF.project,mo=+NF.months||0;
+ if(!pj)return toast('اختار المشروع');if(!mo)return toast('اكتب المدة بالشهور');
+ const ls=NF.lines.filter(l=>l.code&&+l.qty>0);if(!ls.length)return toast('ضيف بند واحد على الأقل بكمية');
+ const pjo=Object.values(PJ).find(x=>x.name===pj)||{},id=p.id,now=Date.now(),keep=new Set(ls.filter(l=>l.lid).map(l=>l.lid));
+ const gc={};ls.forEach(l=>{const g=(MD[l.code]||{}).group||'Other';gc[g]=(gc[g]||0)+1});const group=Object.keys(gc).sort((a,b)=>gc[b]-gc[a])[0]||p.group||'Other';
+ const ops=[];Object.values(LN).filter(l=>l.pr===id&&!keep.has(l.id)).forEach(l=>ops.push(['d','fs_line',l.id]));
+ ls.forEach((l,i)=>{const m=MD[l.code]||{},old=l.lid?LN[l.lid]:null,lid=l.lid||id+'_n'+now.toString(36)+i,{id:_x,...o}=old||{},same=old&&old.code===l.code;
+  ops.push(['s','fs_line',lid,{...o,pr:id,prNo:p.no,date:NF.date,project:pj,od:pjo.od||'',plant:pjo.plant||'',psap:pjo.sap||'',group,sr:i+1,code:m.code||l.code,sap:m.sap||'',name:m.name||l.code,src:(old&&old.src)||'TBD',mo:(old&&old.moc)?old.mo:mo,qty:+l.qty,weight:m.weight||0,price:(same&&+old.price)||m.price||0,rent:(same&&+old.rent)||m.rent||0,by:o.by||me(),at:o.at||now}])});
+ const{id:_y,...po}=p;ops.push(['s','fs_pr',id,{...po,date:NF.date,project:pj,od:pjo.od||'',plant:pjo.plant||'',psap:pjo.sap||'',group,months:mo,n:ls.length,editedBy:me(),editedAt:now}]);
+ if(await batch(ops,'PR '+p.no+' اتعدّل')){closeDr();openPR(id)}}
+
+/* ===== مستندات من هنا: Rental PO / Delivery / Return / Transfer / Plan ===== */
+const PFX={dlv:'DLV',ret:'RET',trn:'TRF',po:'PO',plan:'PLN'},DTYPES=[['po','Rental PO'],['dlv','Delivery'],['ret','Return'],['trn','Transfer'],['plan','Plan']];
+let G=null;
+const prByNo=n=>Object.values(PRS).find(p=>p.no===String(n||'').trim());
+function openLinesOf(p){const req={},dv={};Object.values(LN).filter(l=>l.pr===p.id).forEach(l=>req[l.code]=(req[l.code]||0)+l.qty);Object.values(DL).forEach(l=>{const d=DOC[l.doc];if(d&&(d.type==='dlv'||d.type==='alc')&&d.ref===p.no)dv[l.code]=(dv[l.code]||0)+l.qty});return Object.keys(req).map(c=>({code:c,qty:String(Math.max(0,req[c]-(dv[c]||0)))})).filter(l=>+l.qty>0)}
+function rentalLinesOf(p){const m={};Object.values(LN).filter(l=>l.pr===p.id&&l.src==='Rental').forEach(l=>m[l.code]=(m[l.code]||0)+l.qty);return Object.keys(m).map(c=>({code:c,qty:String(m[c])}))}
+function openDoc(type,prId){if(!ISADMIN)return toast('المستندات للأدمن بس');const p=prId?PRS[prId]:null;
+ G={type:type||'dlv',no:'',date:today(),ref:p?p.no:'',from:'',to:'',vendor:'',lines:[{code:'',qty:''}]};docType(G.type,true);renderDoc();$('scrim').classList.add('open');$('dr').classList.add('open')}
+function docType(t,quiet){G.type=t;const p=prByNo(G.ref);
+ if(t==='po'){G.from='';G.to='';if(p){const r=rentalLinesOf(p);if(r.length)G.lines=r;else if(!quiet)toast('الـ PR ده مفيهوش بنود Rental')}}
+ else{if(t==='dlv'||t==='plan'){G.from='HAC Store';G.to=p?p.project:''}else if(t==='ret'){G.from=p?p.project:'';G.to='HAC Store'}else{G.from=p?p.project:'';G.to=''}
+  if(p&&(t==='dlv'||t==='plan')){const o=openLinesOf(p);if(o.length)G.lines=o}
+  else if(p&&t==='ret'){const b=balOf(p.no),r=Object.keys(b).filter(c=>b[c]>0).map(c=>({code:c,qty:String(b[c])}));if(r.length)G.lines=r}}
+ if(!G.lines.length)G.lines=[{code:'',qty:''}]}
+function renderDoc(){FORM=true;const items=Object.values(MD).sort((a,b)=>String(a.name).localeCompare(String(b.name))),prs=Object.values(PRS).sort((a,b)=>String(b.no).localeCompare(String(a.no))),T=G.type;
+ $('drin').innerHTML=`<div class="drh"><div class="r1"><h3>مستند جديد<small>يتكتب في fs_doc + fs_dline</small></h3><button class="btn sm ic" onclick="closeDr()">✕</button></div>
+ <div class="impTabs">${DTYPES.map(t=>`<button class="impTab ${T===t[0]?'on':''}" onclick="docType('${t[0]}');renderDoc()">${t[1]}</button>`).join('')}</div></div>
+ <div class="drb"><div class="fg">
+ <div class="fl"><label>${T==='po'?'رقم SAP PO *':'رقم المستند (اختياري)'}</label><input value="${E(G.no)}" oninput="G.no=this.value" placeholder="${T==='po'?'45000000':PFX[T]+'-0001'}"></div>
+ <div class="fl"><label>التاريخ</label><input type="date" value="${G.date}" oninput="G.date=this.value"></div>
+ <div class="fl"><label>PR المرجع ${T==='trn'?'':'*'}</label><select onchange="G.ref=this.value;docType(G.type,true);renderDoc()"><option value="">اختار…</option>${prs.map(p=>`<option value="${E(p.no)}" ${p.no===G.ref?'selected':''}>${E(p.no)} — ${E(p.project)}</option>`).join('')}</select></div>
+ <div class="fl"><label>المورد</label><input list="vl" value="${E(G.vendor)}" oninput="G.vendor=this.value"><datalist id="vl">${Object.values(VND).map(v=>`<option value="${E(v.name)}">`).join('')}</datalist></div>
+ ${T==='po'?'':`<div class="fl"><label>من</label><input value="${E(G.from)}" oninput="G.from=this.value"></div><div class="fl"><label>إلى</label><input value="${E(G.to)}" oninput="G.to=this.value"></div>`}</div>
+ <div><div class="sec">البنود — اتحمّلت من الـ PR، عدّل براحتك</div>${G.lines.map((l,i)=>`<div style="display:grid;grid-template-columns:1fr 90px 30px;gap:6px;margin-bottom:6px">
+ <select onchange="G.lines[${i}].code=this.value"><option value="">اختار بند…</option>${items.map(m=>`<option value="${E(m.code)}" ${m.code===l.code?'selected':''}>${E(m.code)} — ${E(m.name)}</option>`).join('')}</select>
+ <input type="number" min="1" placeholder="كمية" value="${E(l.qty)}" oninput="G.lines[${i}].qty=this.value">
+ <button class="btn sm ic dg" onclick="G.lines.splice(${i},1);if(!G.lines.length)G.lines=[{code:'',qty:''}];renderDoc()">✕</button></div>`).join('')}
+ <button class="btn sm" onclick="G.lines.push({code:'',qty:''});renderDoc()">+ بند</button></div></div>
+ <div class="drf"><button class="btn p" style="flex:1" onclick="saveDoc2()">احفظ ${DTYPES.find(t=>t[0]===T)[1]}</button><button class="btn" onclick="closeDr()">إلغاء</button></div>`}
+async function saveDoc2(){const T=G.type,ls=G.lines.filter(l=>l.code&&+l.qty>0);
+ if(!ls.length)return toast('ضيف بند واحد على الأقل بكمية');if(T==='po'&&!G.no.trim())return toast('اكتب رقم الـ SAP PO');
+ const p=prByNo(G.ref);if(T!=='trn'&&!p)return toast('اختار الـ PR المرجع');if(T==='trn'&&(!G.from.trim()||!G.to.trim()))return toast('التحويل محتاج من وإلى');
+ const no=G.no.trim()||PFX[T]+'-'+String(Object.values(DOC).filter(d=>d.type===T).length+1).padStart(4,'0'),id=(T+'_'+no).replace(/[\/\s]/g,'-');
+ if(DOC[id]&&!confirm(TY[T]+' '+no+' موجود — تستبدله؟'))return;
+ const ops=Object.values(DL).filter(l=>l.doc===id).map(l=>['d','fs_dline',l.id]),v=Object.values(VND).find(x=>x.name===G.vendor);
+ ls.forEach((l,i)=>{const m=MD[l.code]||{};ops.push(['s','fs_dline',id+'_'+(i+1),{doc:id,sr:i+1,code:m.code||l.code,sap:m.sap||'',name:m.name||l.code,qty:+l.qty,weight:m.weight||0,price:m.price||0}])});
+ ops.push(['s','fs_doc',id,{type:T,party:'HAC',no,date:G.date,from:T==='po'?'':G.from,to:T==='po'?'':G.to,ref:G.ref.trim(),vendor:G.vendor,vcode:v?(v.code||''):'',project:p?p.project:(G.to||''),n:ls.length,by:me(),at:Date.now()}]);
+ if(await batch(ops,TY[T]+' '+no+' اتحفظ ('+ls.length+' بند)')){closeDr();if(p)openPR(p.id)}}
+function nextActs(p){const ix=idxDL(),st=stageOf(p,ix),al=allocPR(p,ix),a=[];
+ if(ISADMIN){if(st==='tbd')a.push({t:'حدّد المصدر',a:'open:'+p.id,go:true});
+  else if(st==='decided'&&al.some(l=>l.src==='Rental'))a.push({t:'+ Rental PO',a:'doc:po:'+p.id,go:true});
+  else if(st==='decided'||st==='po'||st==='part')a.push({t:'+ Delivery',a:'doc:dlv:'+p.id,go:true});
+  a.push({t:'✎ تعديل',a:'edit:'+p.id})}
+ a.push({t:'افتح الـ PR',a:'open:'+p.id});return a}
+
 /* ===== Dashboard: راح / مرّاحش ===== */
 let DASHF='';
 function dashData(){const ix=idxDL(),prs=Object.values(PRS).filter(p=>inScope(p.project));
  let rq=0,dl=0,rt=0,on=0,leftOpen=0,valBuy=0,valRentMo=0,valRentTot=0,wt=0;
  const byItem={},byProj={},byMonth={},bySrc={TBD:{q:0},Owned:{q:0},Rental:{q:0},Asset:{q:0}};
  prs.forEach(p=>{allocPR(p,ix).forEach(l=>{rq+=l.qty;dl+=l.dl;rt+=l.rt;on+=l.on;wt+=l.qty*(+l.weight||0)/1000;
-  if(!clOf(p,l.src,'D'))leftOpen+=l.left;
+  if(!lcl(p,l,'D'))leftOpen+=l.left;
   valBuy+=l.qty*l.price;const rn=+l.rent||(MD[l.code]||{}).rent||0;valRentMo+=l.qty*rn;valRentTot+=l.qty*rn*l.mo;
   const it=byItem[l.code]=byItem[l.code]||{code:l.code,name:l.name,rq:0,dl:0,rt:0,on:0,v:0};
   it.rq+=l.qty;it.dl+=l.dl;it.rt+=l.rt;it.on+=l.on;it.v+=l.qty*l.price;
@@ -681,7 +771,7 @@ function openImport(){if(!ISADMIN)return toast('الرفع للأدمن بس —
  renderImp();$('dr').classList.add('wide');$('scrim').classList.add('open');$('dr').classList.add('open')}
 function impHead(sub){return`<div class="drh"><div class="r1"><h3>⇪ رفع شيتات<small>${sub}</small></h3><button class="btn sm ic" onclick="closeDr();$('dr').classList.remove('wide')">✕</button></div>
  <div class="impTabs">${Object.keys(IMP_TYPES).map(t=>`<button class="impTab ${IMP.type===t?'on':''}" onclick="IMP.type='${t}';IMP.rows=[];IMP.step='pick';renderImp()">${IMP_TYPES[t].ar}</button>`).join('')}</div></div>`}
-function renderImp(){const T=IMP_TYPES[IMP.type];
+function renderImp(){FORM=true;const T=IMP_TYPES[IMP.type];
  if(IMP.step==='pick'){$('drin').innerHTML=impHead(T.col)+`<div class="drb">
   <div class="drop" id="drop" onclick="$('impFile').click()"><b>📂 اسحب الشيت أو اضغط للاختيار</b>Excel / CSV — أكتر من ملف وشيت مع بعض<input type="file" id="impFile" accept=".xlsx,.xls,.csv" multiple style="display:none" onchange="impFiles(this.files)"></div>
   <div class="note gr">الترتيب الصح: <b>Master ← Projects ← PR Lines ← Movements</b>. مفيش كتابة غير بعد مراجعتك.</div></div>
@@ -750,7 +840,7 @@ function impAnalyze(){const T=IMP_TYPES[IMP.type],ok=[],bad=[];let upd=0;IMP._sr
   else{const no=impVal(r,'docNo'),ty=impVal(r,'type').toLowerCase(),ref=impVal(r,'ref'),code=impVal(r,'code'),qty=impNum(impVal(r,'qty')),dt=impDate(impVal(r,'date'));
    const tm={dlv:'dlv',delivery:'dlv','توريد':'dlv',ret:'ret',return:'ret','مرتجع':'ret',trn:'trn',transfer:'trn','تحويل':'trn',po:'po',plan:'plan','خطة':'plan'};const type=tm[ty]||ty;
    if(!no||!ref||!code)throw'مستند/مرجع/كود ناقص';if(!TY[type])throw'النوع dlv/ret/trn/po/plan';if(!(qty>0))throw'كمية غلط';if(!dt)throw'تاريخ مش مفهوم';
-   const did=(type+'-'+no).replace(/[\/\s]+/g,'-'),m=Object.values(MD).find(x=>String(x.code)===code)||{};
+   const did=(type+'_'+no).replace(/[\/\s]+/g,'-'),m=Object.values(MD).find(x=>String(x.code)===code)||{};
    const pj=(Object.values(PRS).find(p=>p.no===ref)||{}).project||impVal(r,'to')||'';
    if(DOC[did])upd++;
    ok.push({ops:[['s','fs_dline',did+'_'+code.replace(/[\/\s]+/g,'-'),{doc:did,code:m.code||code,name:m.name||impVal(r,'name')||code,qty,by:me(),at:Date.now()}],
@@ -799,7 +889,7 @@ const scopeLines=()=>Object.values(LN).filter(l=>inScope(l.project));
 function nextStep(p){const ix=idxDL(),al=allocPR(p,ix),st=stageOf(p,ix);
  if(st==='closed')return 'الـ PR مقفول. لو فيه رصيد بالموقع فهو عاطل — حوّله لمشروع تاني أو اعمل Return.';
  if(st==='tbd')return 'فيه '+(al.filter(l=>l.src==='TBD').length)+' بند لسه To decide — الأدمن يحدد المصدر من صفحة الـ PR.';
- if(st==='decided')return al.some(l=>l.src==='Rental')?'المصدر Rental ومفيش PO — اعمل Rental PO من ملفك الأصلي.':'المصدر محدد ومفيش توريد — سجّل Delivery.';
+ if(st==='decided')return al.some(l=>l.src==='Rental')?'المصدر Rental ومفيش PO — اعمل Rental PO من هنا — دوس «+ Rental PO».':'المصدر محدد ومفيش توريد — سجّل Delivery.';
  if(st==='po')return 'الـ PO موجود — استنى التوريد وسجّله في Delivery / Return.';
  if(st==='part'){const left=al.reduce((a,l)=>a+l.left,0);return 'توريد جزئي — باقي '+N(left)+' وحدة. تابع الخطة أو اعمل Delivery تاني.'}
  return 'مورّد بالكامل. لما المشروع يخلص اقفل Del و Ret لكل المصادر عشان الـ PR يبقى Closed.'}
@@ -821,7 +911,7 @@ const INTENTS=[
  const nP=all.filter(v=>!v.phone).length,nS=all.filter(v=>!(v.stores||[]).length).length;
  return{lead:'دليل الموردين: <b>'+all.length+'</b> مورد',body:`<div class="astat"><div><b>${all.length}</b><span>مورد</span></div><div><b style="color:var(--rd)">${nS}</b><span>من غير مخزن</span></div><div><b style="color:var(--rd)">${nP}</b><span>من غير تليفون</span></div></div><div class="note">الناقص بيتكمّل من الدليل أو بشيت. اسألني «تليفون [اسم المورد]».</div>`,src:'live',acts:[{t:'افتح الدليل',a:'mode:ven'},{t:'⇪ شيت موردين',a:'impven'}]}}},
 {id:'notdelivered',re:/(مراحش|مرحتش|ماراحش|لسه.*راح|ناقص|shortage)/,h:q=>{const ix=idxDL(),pj=findProj(q);let rows=[];
- Object.values(PRS).filter(p=>inScope(p.project)&&(!pj||p.project===pj)&&!p.closed).forEach(p=>{allocPR(p,ix).forEach(l=>{const left=clOf(p,l.src,'D')?0:l.left;if(left>0)rows.push({pr:p.no,pid:p.id,code:l.code,left,src:l.src})})});
+ Object.values(PRS).filter(p=>inScope(p.project)&&(!pj||p.project===pj)&&!p.closed).forEach(p=>{allocPR(p,ix).forEach(l=>{const left=lcl(p,l,'D')?0:l.left;if(left>0)rows.push({pr:p.no,pid:p.id,code:l.code,left,src:l.src})})});
  rows.sort((a,b)=>b.left-a.left);const tot=rows.reduce((a,r)=>a+r.left,0);
  if(!rows.length)return{lead:'كله راح يا معلم ✓',body:'<div class="note gr">مفيش كميات لسه مرّاحتش.</div>',src:'live'};
  return{lead:'لسه مرّاحش: <b style="color:var(--rd)">'+N(tot)+'</b> وحدة',body:`<table class="at"><tr><th>PR</th><th>البند</th><th class="n">ناقص</th></tr>${rows.slice(0,10).map(r=>`<tr><td>${E(r.pr)}</td><td>${E(r.code)}</td><td class="n" style="color:var(--rd)">${N(r.left)}</td></tr>`).join('')}</table>`,src:'live',acts:[{t:'⬇ Excel',a:'excel'},{t:'افتح أول PR',a:'open:'+rows[0].pid}]}}},
@@ -895,10 +985,13 @@ const INTENTS=[
  return{lead:'جاهز أعمل الطلب — راجع:',body:`<table class="at"><tr><td>البند</td><td><b>${E(it.code)} — ${E(it.name)}</b></td></tr><tr><td>الكمية</td><td class="n">${N(qty)}</td></tr><tr><td>المشروع</td><td>${E(pj||'هتختاره في النموذج')}</td></tr><tr><td>المصدر</td><td>To decide</td></tr></table>`,
  src:'action',acts:[{t:'✓ افتح النموذج بالبيانات',a:'newpref:'+encodeURIComponent(it.code)+':'+qty+':'+encodeURIComponent(pj||''),go:true}]}}},
 {id:'next',re:/(الخطوه الجايه|اعمل ايه|مطلوب مني|next)/,h:q=>{const p=findPR(q)||(DR?PRS[DR.id]:null);
- if(p)return{lead:'PR <b>'+E(p.no)+'</b> — '+E(p.project),body:'<div class="note">'+E(nextStep(p))+'</div>',src:'live',acts:[{t:'افتح الـ PR',a:'open:'+p.id}]};
+ if(p)return{lead:'PR <b>'+E(p.no)+'</b> — '+E(p.project),body:'<div class="note">'+E(nextStep(p))+'</div>',src:'live',acts:nextActs(p)};
  const ix=idxDL(),tbd=scopePRs().filter(p=>stageOf(p,ix)==='tbd'),od=planRows().filter(l=>l.st==='Overdue'&&inScope(projOf(l.d)));
  return{lead:'أولوياتك دلوقتي',body:`<ul class="al">${tbd.length?`<li><b>${tbd.length} PR</b> لسه فيه بنود To decide — ابدأ بـ ${E(tbd[0].no)}</li>`:'<li>مفيش بنود To decide ✓</li>'}
  ${od.length?`<li><b>${od.length}</b> خطة متأخرة</li>`:'<li>مفيش خطط متأخرة ✓</li>'}<li>راجع العاطل قبل أي إيجار جديد</li></ul>`,src:'live',acts:[{t:'المتأخر',q:'إيه المتأخر؟'},{t:'العاطل',q:'كام عاطل؟'}]}}},
+{id:'mkdoc',re:/(اعمل|عاوز|سجل|ضيف|انشئ|اكتب).*(po|rental|ايجار|توريد|delivery|مرتجع|return|تحويل|transfer|خطه|plan)/,h:q=>{const n=norm(q);if(!ISADMIN)return{lead:'المستندات للأدمن بس',body:'<div class="note rd">قواعدك بتحدد كده.</div>',src:'blocked'};
+ const t=/po|rental|ايجار/.test(n)?'po':/مرتجع|return/.test(n)?'ret':/تحويل|transfer/.test(n)?'trn':/خطه|plan/.test(n)?'plan':'dlv',p=findPR(q)||(DR?PRS[DR.id]:null);
+ return{lead:'تمام — '+TY[t]+(p?' لـ PR <b>'+E(p.no)+'</b>':''),body:'<p>هفتحلك النموذج وبحمّل البنود من الـ PR — راجعها واحفظ.</p>',src:'action',acts:[{t:'📝 افتح النموذج',a:'doc:'+t+':'+(p?p.id:''),go:true}]}}},
 {id:'explain',re:/(يعني ايه|اشرح|what is|ايه هو)/,h:q=>{const n=norm(q);let k=null;
  Object.keys(KB).forEach(x=>{if(n.includes(norm(KB[x].t))||n.includes(x))k=x});
  if(!k){if(/عاطل|idle/.test(n))k='idle';else if(/po|امر/.test(n))k='po';else if(/plan|خطه/.test(n))k='plan';else if(/قفل|close/.test(n))k='cl'}
@@ -909,7 +1002,7 @@ function prCard(p){const ix=idxDL(),al=allocPR(p,ix),st=STAGES.find(s=>s.id===st
  body:`<table class="at"><tr><td>المرحلة</td><td>${st.ar}</td></tr><tr><td>التاريخ</td><td>${D(p.date)}</td></tr>
  <tr><td>مطلوب / مورّد</td><td class="n">${N(al.reduce((a,l)=>a+l.qty,0))} / ${N(al.reduce((a,l)=>a+l.dl,0))}</td></tr>
  <tr><td>بالموقع</td><td class="n">${N(al.reduce((a,l)=>a+l.on,0))}</td></tr><tr><td>الحالة</td><td>${p.closed?'Closed':'Active'}</td></tr></table>
- <div class="note">${E(nextStep(p))}</div>`,src:'live',acts:[{t:'افتح',a:'open:'+p.id}]}}
+ <div class="note">${E(nextStep(p))}</div>`,src:'live',acts:nextActs(p)}}
 function answer(q){const pr=findPR(q);if(pr&&norm(q).split(' ').length<=4)return prCard(pr);
  for(const I of INTENTS)if(I.re.test(norm(q))){const r=I.h(q);if(r)return r}
  if(pr)return prCard(pr);
@@ -933,6 +1026,8 @@ function runAct(a){if(!a)return;const p=a.split(':');
   else if(p[0]==='open')openPR(p[1]);
  else if(p[0]==='mode'){MODE=p[1];render()}
  else if(p[0]==='proj'){PSEL=decodeURIComponent(p.slice(1).join(':'));render()}
+ else if(p[0]==='doc')openDoc(p[1],p[2]);
+ else if(p[0]==='edit')openEditPR(p[1]);
  else if(p[0]==='new')openNew();
  else if(p[0]==='newpref'){openNew();const code=decodeURIComponent(p[1]),qty=+p[2],pj=decodeURIComponent(p[3]);
   NF.lines=[{code,qty:String(qty)}];if(pj)NF.project=pj;renderNew()}}
