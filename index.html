@@ -355,6 +355,11 @@ button.role:hover{border-color:var(--ac)}
 #pg .Closed, .modal .Closed, #acbox .Closed{background:var(--s3);color:var(--mu)}
 #pg .TBD, .modal .TBD, #acbox .TBD{background:rgba(125,133,144,.2);color:var(--mu)}
 #pg .Delivered, .modal .Delivered, #acbox .Delivered{background:rgba(63,185,80,.15);color:var(--gr)}
+
+#calc,#sk,#skb{direction:ltr;text-align:left}
+#calc .box,#sk .box,#skb .box{font-family:Inter,Tajawal,sans-serif}
+
+body.is-noexp #expDashBtn, body.is-noexp [onclick*="advXlsx("], body.is-noexp [onclick*="advPdf("], body.is-noexp [onclick*="advItemXlsx("], body.is-noexp [onclick*="advProjXlsx("], body.is-noexp [onclick*="execPdf("], body.is-noexp [onclick*="expExcel("], body.is-noexp [onclick*="expCSV("], body.is-noexp [onclick*="pExport("], body.is-noexp [onclick*="exportDash("]{display:none!important}
 </style>
 <style id="v15css">
 #pg .top, .modal .top, #acbox .top{background:var(--s);border-bottom:1px solid var(--bd);height:56px;padding:0 24px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50}
@@ -693,7 +698,7 @@ const ALLOW={tbd:['decided'],decided:['po','part'],po:['part'],part:['full'],ful
 /* ===== الاتصال والاستماع ===== */
 function setConn(c,t,s){const e=$('conn');e.className='chip '+c;$('ct').textContent=c==='live'?'لحظي':t;$('cs').textContent=s;e.title=t+' · '+s}
 let ROLEU=null;
-function applyRole(){if(MYPROJ)PSEL=MYPROJ;{const ae=$('acctEmail');if(ae)ae.textContent=(au.currentUser||{}).email||''}const r=$('role');r.textContent=ISADMIN?'Admin':MYPROJ?MYPROJ:'View only';r.className='role '+(ISADMIN?'admin':MYPROJ?'proj':'');document.body.classList.toggle('is-viewer',RO);document.body.classList.toggle('is-proj',!!MYPROJ);
+function applyRole(){if(MYPROJ)PSEL=MYPROJ;{const ae=$('acctEmail');if(ae)ae.textContent=(au.currentUser||{}).email||''}const r=$('role');r.textContent=ISADMIN?'Admin':MYPROJ?MYPROJ:'View only';r.className='role '+(ISADMIN?'admin':MYPROJ?'proj':'');document.body.classList.toggle('is-viewer',RO);document.body.classList.toggle('is-proj',!!MYPROJ);document.body.classList.toggle('is-noexp',!ISADMIN);
  $('newBtn').disabled=!canCreatePR();$('docBtn').disabled=!ISADMIN}
 au.onAuthStateChanged(async u=>{
  if(!u){if(ROLEU){ROLEU();ROLEU=null}stopPresence();stopAll();$('login').style.display='grid';$('out').style.display='none';$('role').textContent='—';$('role').className='role';setConn('wait','محتاج دخول','sign in');return}
@@ -883,6 +888,7 @@ function renderDr(){FORM=false;if(!DR)return;const p=PRS[DR.id];if(!p){closeDr()
  <table style="min-width:0"><tr><th>البند</th><th class="n">كمية</th><th class="n">مورّد</th><th>المصدر</th><th>Del</th><th>Ret</th></tr>
  ${al.map(l=>`<tr style="${lcl(p,l,'D')&&lcl(p,l,'R')?'opacity:.55':''}"><td><b>${E(l.code)}</b><div style="font-size:12px;color:var(--dim)">${E(l.name)}</div></td><td class="n">${N(l.qty)}</td><td class="n">${N(l.dl)}</td>
  <td>${ISADMIN?`<select onchange="setLineSrc(${Q(l.id)},this.value)" style="width:110px">${SRC.map(s=>`<option value="${s}" ${l.src===s?'selected':''}>${SL[s]}</option>`).join('')}</select>`:`<span class="tg ${l.src}">${SL[l.src]}</span>`}</td><td>${lclBtn(p,l,'D')}</td><td>${lclBtn(p,l,'R')}</td></tr>`).join('')}</table></div>
+ ${areasView(p)}
  ${reconHTML(p,al)}
   ${ds.length?`<div><div class="sec">مستندات على الـ PR (${ds.length})</div><table style="min-width:0"><tr><th>التاريخ</th><th>المستند</th><th>النوع</th><th class="n">بنود</th></tr>
  ${ds.map(d=>`<tr><td>${D(d.date)}</td><td><b>${E(d.no)}</b></td><td>${TY[d.type]}</td><td class="n">${d.n||0}</td></tr>`).join('')}</table></div>`:'<div class="note">مفيش PO أو توريد أو خطة على الـ PR ده لسه.</div>'}
@@ -898,7 +904,7 @@ async function closePR(id){const p=PRS[id];if(!p)return;const all={};SRC.forEach
 /* ===== PR جديد ===== */
 let NF=null;
 function openNew(){if(!canCreatePR())return toast('الإنشاء للأدمن أو حساب مشروع');
- NF={no:'',date:today(),project:MYPROJ||'',months:'',lines:[{code:'',qty:''}]};renderNew();$('scrim').classList.add('open');$('dr').classList.add('open')}
+ NF={no:'',date:today(),project:MYPROJ||'',months:'',areas:[],lines:[{code:'',qty:''}]};renderNew();$('scrim').classList.add('open');$('dr').classList.add('open')}
 let FORM=false;
 function renderNew(){FORM=true;const items=Object.values(MD).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
  $('drin').innerHTML=`<div class="drh"><div class="r1"><h3>${NF.id?'تعديل PR '+E(NF.no):'PR جديد'}<small>${NF.id?'بيتحدّث في fs_pr + fs_line':'يتكتب في fs_pr + fs_line'}</small></h3><button class="btn sm ic" aria-label="إغلاق" onclick="closeDr()">✕</button></div></div>
@@ -908,7 +914,8 @@ function renderNew(){FORM=true;const items=Object.values(MD).sort((a,b)=>String(
  <div class="fl"><label>المشروع *</label>${MYPROJ?`<input value="${E(MYPROJ)}" disabled>`:`<select id="n-pj" onchange="NF.project=this.value"><option value="">اختار…</option>${Object.values(PJ).map(p=>`<option ${p.name===NF.project?'selected':''}>${E(p.name)}</option>`).join('')}</select>`}</div>
  <div class="fl"><label>المدة (شهور) *</label><input type="number" min="1" value="${E(NF.months)}" oninput="NF.months=this.value"></div></div>
  <div><div class="sec">البنود</div><div id="n-lines">${NF.lines.map((l,i)=>lineRow(l,i,items)).join('')}</div>
- <button class="btn sm" style="margin-top:7px" onclick="NF.lines.push({code:'',qty:''});renderNew()">+ بند</button></div>
+ <button class="btn sm" style="margin-top:7px" onclick="NF.lines.push({code:'',qty:''});renderNew()">+ بند</button> <button class="btn sm" style="margin-top:7px" onclick="calcOpen()" title="احسب الكميات من مساحة الشدة">&#9638; حاسبة المساحة</button></div>
+  ${areasCard()}
  <div class="note">المصدر الافتراضي <b>To decide</b> — الأدمن بيحدده بعدين من صفحة الـ PR. ده نفس سلوك ملفك.</div></div>
  <div class="drf"><button class="btn p" style="flex:1" onclick="saveNew()">${NF.id?'احفظ التعديل':'احفظ في Firestore'}</button><button class="btn" onclick="closeDr()">إلغاء</button></div>`}
 function lineRow(l,i,items){return `<div style="display:grid;grid-template-columns:1fr 90px 30px;gap:6px;margin-bottom:6px">
@@ -925,13 +932,13 @@ async function saveNew(){
  const gc={};ls.forEach(l=>{const g=(mdOf(l.code)||{}).group||'Other';gc[g]=(gc[g]||0)+1});
  const group=Object.keys(gc).sort((a,b)=>gc[b]-gc[a])[0]||'Other';
  const ops=[];ls.forEach((l,i)=>{const m=mdOf(l.code)||{};ops.push(['s','fs_line',id+'_'+(i+1),{pr:id,prNo:no,date:NF.date,project:pj,od:pjo.od||'',plant:pjo.plant||'',psap:pjo.sap||'',group,sr:i+1,code:m.code||l.code,sap:m.sap||'',name:m.name||l.code,src:'TBD',mo,qty:+l.qty,weight:m.weight||0,price:m.price||0,rent:m.rent||0,by:me(),at:now}])});
- ops.push(['s','fs_pr',id,{no,date:NF.date,project:pj,od:pjo.od||'',plant:pjo.plant||'',psap:pjo.sap||'',group,months:mo,n:ls.length,by:me(),closed:false,areas:[],at:now}]);
+ ops.push(['s','fs_pr',id,{no,date:NF.date,project:pj,od:pjo.od||'',plant:pjo.plant||'',psap:pjo.sap||'',group,months:mo,n:ls.length,by:me(),closed:false,areas:NF.areas||[],at:now}]);
  if(!ISADMIN&&MYPROJ){try{const b=fs.batch();ops.forEach(([t,c,i2,o])=>b.set(fs.collection(c).doc(i2),o));await b.commit();toast('PR '+no+' اتحفظ ✓');closeDr();return}catch(e){return toast('القواعد رفضت: '+e.message)}}
  if(await batch(ops,'PR '+no+' اتحفظ')){closeDr();ask('إيه الخطوة الجاية لـ PR '+no+'؟')}}
 
 /* ===== تعديل PR من هنا ===== */
 function openEditPR(id){if(!ISADMIN)return toast('التعديل للأدمن بس');const p=PRS[id];if(!p)return;
- NF={id,no:p.no,date:p.date||today(),project:p.project||'',months:p.months||'',lines:Object.values(LN).filter(l=>l.pr===id).sort((a,b)=>a.sr-b.sr).map(l=>({lid:l.id,code:l.code,qty:String(l.qty)}))};
+ NF={id,no:p.no,date:p.date||today(),project:p.project||'',months:p.months||'',areas:(p.areas||[]).map(a=>({...a})),lines:Object.values(LN).filter(l=>l.pr===id).sort((a,b)=>a.sr-b.sr).map(l=>({lid:l.id,code:l.code,qty:String(l.qty)}))};
  if(!NF.lines.length)NF.lines=[{code:'',qty:''}];renderNew();$('scrim').classList.add('open');$('dr').classList.add('open')}
 async function saveEditPR(){const p=PRS[NF.id];if(!p)return;const pj=NF.project,mo=+NF.months||0;
  if(!pj)return toast('اختار المشروع');if(!mo)return toast('اكتب المدة بالشهور');
@@ -941,7 +948,7 @@ async function saveEditPR(){const p=PRS[NF.id];if(!p)return;const pj=NF.project,
  const ops=[];Object.values(LN).filter(l=>l.pr===id&&!keep.has(l.id)).forEach(l=>ops.push(['d','fs_line',l.id]));
  ls.forEach((l,i)=>{const m=mdOf(l.code)||{},old=l.lid?LN[l.lid]:null,lid=l.lid||id+'_n'+now.toString(36)+i,{id:_x,...o}=old||{},same=old&&old.code===l.code;
   ops.push(['s','fs_line',lid,{...o,pr:id,prNo:p.no,date:NF.date,project:pj,od:pjo.od||'',plant:pjo.plant||'',psap:pjo.sap||'',group,sr:i+1,code:m.code||l.code,sap:m.sap||'',name:m.name||l.code,src:(old&&old.src)||'TBD',mo:(old&&old.moc)?old.mo:mo,qty:+l.qty,weight:m.weight||0,price:(same&&+old.price)||m.price||0,rent:(same&&+old.rent)||m.rent||0,by:o.by||me(),at:o.at||now}])});
- const{id:_y,...po}=p;ops.push(['s','fs_pr',id,{...po,date:NF.date,project:pj,od:pjo.od||'',plant:pjo.plant||'',psap:pjo.sap||'',group,months:mo,n:ls.length,editedBy:me(),editedAt:now}]);
+ const{id:_y,...po}=p;ops.push(['s','fs_pr',id,{...po,date:NF.date,project:pj,od:pjo.od||'',plant:pjo.plant||'',psap:pjo.sap||'',group,months:mo,n:ls.length,areas:NF.areas||po.areas||[],editedBy:me(),editedAt:now}]);
  if(await batch(ops,'PR '+p.no+' اتعدّل')){closeDr();openPR(id)}}
 
 /* (document forms moved to the full form below — see BRIDGE) */
@@ -3224,6 +3231,101 @@ Object.assign(window,{exportDash,pdash,ppr,pOpen,pExport,accPage,accLoad,accCfg,
 })();
 /* route the new pages + load accounts when that page opens */
 (function(){const _g=go;go=function(p){const r=_g(p);if(p==='acc'&&window.accLoad)window.accLoad();return r}})();
+</script>
+<script>
+/* ================= PORTED FROM HAC PR Creator v13: Area calculator + building sketch (draw the shape, drag corners, get the area) ================= */
+/* ================= area calculator: quantities from formwork area ================= */
+let CALC=null;
+const cArea=p=>{const l=+p.l,w=+p.w;return Math.max(0,l>0&&w>0?l*w:(+p.a||0))};
+const cTot=()=>Math.max(0,CALC.parts.reduce((a,p)=>a+cArea(p),0)-Math.max(0,+CALC.ded||0));
+const cRules=()=>Object.values(MD).filter(m=>+m.perM2>0&&m.group===CALC.group).sort((a,b)=>a.name.localeCompare(b.name));
+const cQty=m=>{const o=CALC.ov[m.code];if(o!==undefined&&o!=='')return Math.max(0,Math.round(+o)||0);return Math.ceil(+(cTot()*(+m.perM2)*(1+Math.max(0,+CALC.waste||0)/100)).toFixed(6))};
+async function setCov(id,v){const m=MD[id];if(!m)return;const {id:_i,...r}=m;r.perM2=Math.max(0,+v||0);if(!r.perM2)delete r.perM2;await DB.set('fs_master',id,r);toast(m.code+': '+(r.perM2?r.perM2+' per m\u00b2':'rate removed'))}
+function calcOpen(){const gs=[...new Set(Object.values(MD).filter(m=>+m.perM2>0).map(m=>m.group))].sort();
+ if(!gs.length)return toast('No item has a "Per m\u00b2" rate yet \u2014 add a "Per m\u00b2" column to the Master Data import first');
+ CALC={group:gs.includes(GROUP)?GROUP:gs[0],parts:[{n:'',l:'',w:'',a:''}],ded:'',waste:5,ov:{},off:{}};calcDraw()}
+function calcClose(){const d=$('calc');d&&d.remove();CALC=null}
+function calcDraw(){let d=$('calc');if(!d){d=document.createElement('div');d.className='modal';d.id='calc';document.body.appendChild(d)}
+ const gs=[...new Set(Object.values(MD).filter(m=>+m.perM2>0).map(m=>m.group))].sort(),pi=(i,k,ph,w)=>`<input type="number" min="0" step="any" placeholder="${ph}" value="${E(CALC.parts[i][k])}" oninput="CALC.parts[${i}].${k}=this.value;calcRes()" style="width:${w}px">`;
+ d.innerHTML=`<div class="box" style="width:min(780px,100%);max-height:92vh;overflow:auto"><h3>Area calculator</h3><div class="sub">Estimate only &mdash; quantity = net area &times; rate per m&sup2; (Master Data) &times; (1 + waste). Check it against the engineer's design before you send the PR.</div>
+ <div class="hd" style="margin:14px 0"><div><label>Element type (item group)</label><select onchange="CALC.group=this.value;CALC.ov={};CALC.off={};calcRes()">${gs.map(g=>`<option ${g===CALC.group?'selected':''}>${E(g)}</option>`).join('')}</select></div><div><label>Waste / spare %</label><input type="number" min="0" step="any" value="${E(CALC.waste)}" oninput="CALC.waste=this.value;calcRes()"></div><div><label>Deduct openings (m&sup2;)</label><input type="number" min="0" step="any" value="${E(CALC.ded)}" oninput="CALC.ded=this.value;calcRes()"></div></div>
+ <div class="tw"><table><tr><th>Area part</th><th class="n">Length m</th><th class="n">Width m</th><th class="n">or Area m&sup2;</th><th class="n">m&sup2;</th><th></th></tr>${CALC.parts.map((p,i)=>`<tr><td><input placeholder="e.g. Slab A" value="${E(p.n)}" oninput="CALC.parts[${i}].n=this.value" style="width:100%"></td><td class="n">${pi(i,'l','L',80)}</td><td class="n">${pi(i,'w','W',80)}</td><td class="n">${pi(i,'a','m\u00b2',90)}</td><td class="n" id="ca${i}">-</td><td>${CALC.parts.length>1?`<button class="x" onclick="CALC.parts.splice(${i},1);calcDraw()">&times;</button>`:''}</td></tr>`).join('')}</table></div>
+ <div class="tools" style="margin-top:8px"><button class="sm" onclick="CALC.parts.push({n:'',l:'',w:'',a:''});calcDraw()">+ Add area part</button><button class="sm" onclick="skOpen()" title="Draw the shape and get its area">&#9998; Sketch area</button><span class="sub">Length &times; Width wins when both are filled; otherwise the Area box is used.</span></div>
+ <div id="cres"></div>
+ <div class="tools" style="margin-top:14px"><button class="sm" onclick="calcClose()">Cancel</button><span style="flex:1"></span><button class="btn" onclick="calcApply()">Add to PR</button></div></div>`;calcRes()}
+function calcRes(){if(!CALC||!$('cres'))return;const A=cTot(),rs=cRules();CALC.parts.forEach((p,i)=>{const e=$('ca'+i);if(e)e.textContent=cArea(p)?N1(cArea(p)):'-'});
+ $('cres').innerHTML=`<div class="card" style="margin:12px 0 8px">Net area <b style="color:var(--ac)">${N1(A)} m&sup2;</b> &middot; ${E(CALC.group)}</div>`+(rs.length?`<div class="tw"><table><tr><th></th><th>Code</th><th>Item</th><th class="n">Per m&sup2;</th><th class="n">Qty</th></tr>${rs.map(m=>`<tr><td><input type="checkbox" ${CALC.off[m.code]?'':'checked'} onchange="CALC.off['${Q(m.code)}']=!this.checked"></td><td><b>${E(m.code)}</b></td><td>${E(m.name)}</td><td class="n">${N1(m.perM2)}</td><td class="n"><input class="q" type="number" min="0" step="1" value="${cQty(m)}" oninput="CALC.ov['${Q(m.code)}']=this.value"></td></tr>`).join('')}</table></div><div class="sub" style="margin-top:6px">You can overwrite any quantity. Untick an item to leave it out.</div>`:`<div class="sub err">No item in this group has a rate per m&sup2;.</div>`)}
+function calcApply(){if(!CALC)return;const add=cRules().filter(m=>!CALC.off[m.code]).map(m=>({m,q:cQty(m)})).filter(x=>x.q>0);
+ if(!add.length)return toast('Nothing to add - enter the area first');
+ NF.lines=NF.lines.filter(l=>l.code);let merged=0;
+ add.forEach(({m,q})=>{const ex=NF.lines.find(l=>l.code===m.code);if(ex){ex.qty=String((+ex.qty||0)+q);merged++}else NF.lines.push({code:m.code,qty:String(q)})});
+ NF.lines.push({code:'',qty:''});const n=add.length;calcClose();renderNew();toast(n+' item(s) added from the area calculator'+(merged?' ('+merged+' added to a line already in the PR)':'')+'. Choose the source of each line.')}
+
+/* ================= sketch: draw the shape on a grid, drag corners, get the area ================= */
+let SK=null;
+const skArea=p=>{let a=0;p.forEach((q,i)=>{const r=p[(i+1)%p.length];a+=q[0]*r[1]-r[0]*q[1]});return Math.abs(a)/2};
+const skSq=()=>+(skArea(SK.pts)*SK.g*SK.g).toFixed(2);
+const skCell=e=>{const v=$('sks'),r=v.getBoundingClientRect();return[(e.clientX-r.left)*600/r.width/20,(e.clientY-r.top)*400/r.height/20]};
+function skOpen(ix){const a=ix>=0?(NF.areas||[])[ix]:null;SK={g:a?a.g:1,pts:a?skP(a):[],closed:!!a,drag:-1,free:a?a.pts.some(v=>v%1!==0):false,cal:null,ix:a?ix:-1,n:a?a.n:'Area '+String.fromCharCode(65+(NF.areas||[]).length%26)};let d=$('sk');if(!d){d=document.createElement('div');d.className='modal';d.id='sk';document.body.appendChild(d)}
+ d.innerHTML=`<div class="box" style="width:min(700px,100%);max-height:94vh;overflow:auto"><h3>Sketch area</h3><div class="sub">Click to place corners, click the first point to close. Then drag any corner to adjust. Or start from a typed Length &times; Width. Each square = the grid size.</div>
+ <div class="tools" style="margin:10px 0 6px"><input id="skn" placeholder="Name (e.g. Slab A)" value="${E(SK.n)}" style="width:150px"><span class="sub">Grid</span><select id="skg" onchange="SK.g=+this.value;skDraw()">${[0.1,0.25,0.5,1,2,5].map(g=>`<option value="${g}" ${g===SK.g?'selected':''}>${g} m</option>`).join('')}</select><input id="skl" type="number" min="0" step="any" placeholder="L m" style="width:75px"><input id="skw" type="number" min="0" step="any" placeholder="W m" style="width:75px"><button class="sm" onclick="$('skf').click()" title="Trace over a plan image (PNG / JPG)">Plan image</button><input id="skf" type="file" accept="image/*" onchange="skImg(this)"><button class="sm" onclick="skCal()" title="Click two points of a known distance on the plan">Set scale</button><button class="sm" onclick="skPre(0)">Rectangle</button><button class="sm" onclick="skPre(1)">L-shape</button></div>
+ <svg id="sks" viewBox="0 0 600 400" style="width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:8px;touch-action:none;cursor:crosshair"><defs><pattern id="skp" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#30363d" stroke-width=".6"/></pattern></defs><image id="skim" width="600" height="400" preserveAspectRatio="xMidYMid meet" opacity=".6" style="display:none"/><rect width="600" height="400" fill="url(#skp)"/><g id="skd"></g></svg>
+ <div id="ski" class="card" style="margin:8px 0"></div>
+ <div class="tools"><button class="sm" onclick="SK.closed?SK.closed=false:SK.pts.pop();skDraw()">Undo</button><button class="sm dg" onclick="SK.pts=[];SK.closed=false;skDraw()">Clear</button><button class="sm" onclick="SK.pts.length>2&&(SK.closed=true);skDraw()">Close shape</button><span style="flex:1"></span><button class="sm" onclick="$('sk').remove();SK=null">Cancel</button><button class="btn" onclick="skUse()">Use this area</button></div></div>`;
+ {const sel=$('skg');if(![...sel.options].some(o=>+o.value===SK.g))sel.add(new Option(SK.g+' m (scaled)',SK.g));sel.value=SK.g}
+ const v=$('sks');v.addEventListener('pointerdown',skDown);v.addEventListener('pointermove',skMove);v.addEventListener('pointerup',()=>{SK.drag=-1});skDraw()}
+const sr=x=>SK.free?+x.toFixed(2):Math.round(x);
+function skDown(e){const c=skCell(e);if(SK.cal){SK.cal.push(c);if(SK.cal.length===2){const D=Math.hypot(SK.cal[0][0]-SK.cal[1][0],SK.cal[0][1]-SK.cal[1][1]),R=+(prompt('Real distance between the two points (meters)?')||0);SK.cal=null;if(D>.2&&R>0){SK.g=+(R/D).toFixed(4);const sel=$('skg');if(![...sel.options].some(o=>+o.value===SK.g))sel.add(new Option(SK.g+' m (scaled)',SK.g));sel.value=SK.g;SK.free=true;toast('Scale set: 1 square = '+SK.g+' m. Now trace the shape.')}else toast('Scale not set - click two points apart and enter a distance')}skDraw();return}const i=SK.pts.findIndex(q=>Math.hypot(q[0]-c[0],q[1]-c[1])<.5),sn=[Math.max(0,Math.min(30,sr(c[0]))),Math.max(0,Math.min(20,sr(c[1])))];
+ if(SK.closed){if(i>=0){SK.drag=i;$('sks').setPointerCapture(e.pointerId)}}
+ else if(i===0&&SK.pts.length>2)SK.closed=true;else if(i<0)SK.pts.push(sn);skDraw()}
+function skMove(e){if(!SK||SK.drag<0)return;const c=skCell(e);SK.pts[SK.drag]=[Math.max(0,Math.min(30,sr(c[0]))),Math.max(0,Math.min(20,sr(c[1])))];skDraw()}
+function skImg(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=$('skim');im.setAttribute('href',r.result);im.style.display='';SK.free=true;toast('Plan loaded. Press Set scale and click two points of a known distance.')};r.readAsDataURL(f);inp.value=''}
+function skCal(){if($('skim').style.display==='none')return toast('Load a plan image first');SK.cal=[];skDraw()}
+function skPre(k){const L=+$('skl').value,W=+$('skw').value;if(!(L>0&&W>0))return toast('Enter Length and Width first');
+ const g=[0.1,0.25,0.5,1,2,5].find(x=>L/x<=26&&W/x<=16);if(!g)return toast('Too large for the sketch - use the Length/Width boxes in the calculator');
+ SK.g=g;$('skg').value=g;const l=L/g,w=W/g,o=2;SK.pts=k?[[o,o],[o+l,o],[o+l,o+w*.6],[o+l*.6,o+w*.6],[o+l*.6,o+w],[o,o+w]]:[[o,o],[o+l,o],[o+l,o+w],[o,o+w]];SK.closed=true;skDraw()}
+function skDraw(){if(!SK)return;const P=SK.pts,px=q=>q[0]*20+','+q[1]*20,n=P.length,eN=SK.closed?n:n-1;let h='';
+ if(n>1)h+=`<${SK.closed?'polygon':'polyline'} points="${P.map(px).join(' ')}" fill="${SK.closed?'rgba(240,165,0,.18)':'none'}" stroke="#f0a500" stroke-width="2"/>`;
+ for(let i=0;i<eN;i++){const a=P[i],b=P[(i+1)%n],len=+(Math.hypot(a[0]-b[0],a[1]-b[1])*SK.g).toFixed(2);if(len)h+=`<text x="${(a[0]+b[0])*10}" y="${(a[1]+b[1])*10-5}" fill="#e6edf3" font-size="11" text-anchor="middle" style="pointer-events:none">${len} m</text>`}
+ P.forEach((q,i)=>h+=`<circle cx="${q[0]*20}" cy="${q[1]*20}" r="${!SK.closed&&i===0&&n>2?8:5}" fill="${i===0?'#3fb950':'#f0a500'}" style="cursor:${SK.closed?'move':'pointer'}"/>`);
+ (SK.cal||[]).forEach(q=>h+=`<circle cx="${q[0]*20}" cy="${q[1]*20}" r="6" fill="#58a6ff"/>`);$('skd').innerHTML=h;let info=SK.cal?`Set scale: click ${SK.cal.length?'the second':'the first'} point of a known distance on the plan`:SK.closed?`Area <b style="color:var(--ac)">${N1(skSq())} m&sup2;</b> &middot; drag a corner to adjust`:`${n} point(s) &middot; ${n>2?'click the green point to close':'keep clicking to add corners'}`;$('ski').innerHTML=info+skHints()}
+
+/* live suggestions while sketching (rule based, no external service) */
+const skFit=(w,h)=>w>0&&h>0?[0.1,0.25,0.5,1,2,5].find(g=>w*SK.g/g<=26&&h*SK.g/g<=16):0;
+const skSeg=(a,b,c,d)=>{const o=(p,q,r)=>(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]);return o(a,b,c)*o(a,b,d)<0&&o(c,d,a)*o(c,d,b)<0};
+const skCross=P=>{const n=P.length;for(let i=0;i<n;i++)for(let j=i+2;j<n;j++){if(i===0&&j===n-1)continue;if(skSeg(P[i],P[(i+1)%n],P[j],P[(j+1)%n]))return true}return false};
+function skHints(){const P=SK.pts,n=P.length,h=[],tip=t=>h.push(`<div class="sub" style="margin-top:5px">&#128161; ${t}</div>`);
+ if(n>2&&skCross(P))tip('<span class="err">The lines cross each other &mdash; the area will be wrong. Undo or move a corner.</span>');
+ if(SK.closed){
+  if(n===4){const e=[0,1,2,3].map(i=>{const a=P[i],b=P[(i+1)%4];return[b[0]-a[0],b[1]-a[1]]}),len=v=>Math.hypot(v[0],v[1]),sq=e.every((u,i)=>{const v=e[(i+1)%4];return len(u)&&len(v)&&Math.abs(u[0]*v[0]+u[1]*v[1])/(len(u)*len(v))<.12}),ax=e.every(v=>Math.abs(v[0])<1e-6||Math.abs(v[1])<1e-6);
+   if(sq)tip(ax?'Rectangle '+(+(len(e[0])*SK.g).toFixed(2))+' &times; '+(+(len(e[1])*SK.g).toFixed(2))+' m':'It looks like a rectangle but it is tilted &mdash; <span class="lk" onclick="skSquare()">make it an exact rectangle</span>')}
+  const xs=P.map(q=>q[0]),ys=P.map(q=>q[1]),w=Math.max(...xs)-Math.min(...xs),hh=Math.max(...ys)-Math.min(...ys),z=skFit(w,hh);
+  if(!SK.free&&w<=10&&hh<=7&&z&&z<SK.g)tip('The shape is small on the grid &mdash; <span class="lk" onclick="skZoom()">zoom in to '+z+' m squares</span> for a more accurate drawing');
+  if(CALC){const A=skSq(),k=1+Math.max(0,+CALC.waste||0)/100,rs=cRules().slice(0,6);if(rs.length)tip('For '+N1(A)+' m&sup2; ('+E(CALC.group)+'): '+rs.map(m=>E(m.code)+' &times; '+Math.ceil(+(A*m.perM2*k).toFixed(6))).join(' &middot; '))}
+ }else if(n>=3)tip('Click the green point to close the shape');
+ return h.join('')}
+function skSquare(){const P=SK.pts,d=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]),L=(d(P[0],P[1])+d(P[2],P[3]))/2,W=(d(P[1],P[2])+d(P[3],P[0]))/2,x=Math.min(...P.map(q=>q[0])),y=Math.min(...P.map(q=>q[1]));SK.pts=[[x,y],[x+L,y],[x+L,y+W],[x,y+W]];skDraw()}
+function skZoom(){const P=SK.pts,xs=P.map(q=>q[0]),ys=P.map(q=>q[1]),x0=Math.min(...xs),y0=Math.min(...ys),z=skFit(Math.max(...xs)-x0,Math.max(...ys)-y0);if(!z||z>=SK.g)return;const k=SK.g/z;SK.pts=P.map(q=>[(q[0]-x0)*k+2,(q[1]-y0)*k+2]);SK.g=z;$('skg').value=z;skDraw()}
+function skUse(){if(!SK||!SK.closed||SK.pts.length<3)return toast('Close the shape first');const a=skSq();if(!(a>0))return toast('The area is zero');
+ const nm=$('skn').value.trim()||'Sketch',rec={n:nm,g:SK.g,pts:SK.pts.flatMap(q=>[+q[0].toFixed(3),+q[1].toFixed(3)])};
+ NF.areas=NF.areas||[];if(SK.ix>=0)NF.areas[SK.ix]=rec;else NF.areas.push(rec);
+ if(CALC){const last=CALC.parts[CALC.parts.length-1],empty=!(last.l||last.w||last.a||last.n),part={n:nm,l:'',w:'',a:String(a)};if(empty)CALC.parts[CALC.parts.length-1]=part;else CALC.parts.push(part)}
+ $('sk').remove();SK=null;CALC?calcDraw():renderNew();toast('Sketch added \u2014 press save to keep it with the PR')}
+
+const skP=a=>{const r=[];for(let i=0;i<a.pts.length;i+=2)r.push([a.pts[i],a.pts[i+1]]);return r};
+const skMini=(a,w)=>{const P=skP(a),xs=P.map(q=>q[0]),ys=P.map(q=>q[1]),x0=Math.min(...xs),y0=Math.min(...ys),dx=Math.max(...xs)-x0||1,dy=Math.max(...ys)-y0||1,k=Math.min((w-16)/dx,(w*.62-16)/dy);return`<svg width="${w}" height="${Math.round(w*.62)}" style="background:var(--bg);border:1px solid var(--bd);border-radius:6px"><polygon points="${P.map(q=>(8+(q[0]-x0)*k).toFixed(1)+','+(8+(q[1]-y0)*k).toFixed(1)).join(' ')}" fill="rgba(240,165,0,.2)" stroke="#f0a500" stroke-width="1.5"/></svg>`};
+const areaSq=a=>+(skArea(skP(a))*a.g*a.g).toFixed(2);
+function skBig(i){const a=((PRS[DR&&DR.id]||{}).areas||[])[i];if(!a)return;const P=skP(a),xs=P.map(q=>q[0]),ys=P.map(q=>q[1]),x0=Math.min(...xs),y0=Math.min(...ys),dx=Math.max(...xs)-x0||1,dy=Math.max(...ys)-y0||1,k=Math.min(520/dx,320/dy),X=q=>40+(q[0]-x0)*k,Y=q=>40+(q[1]-y0)*k;
+ const lb=P.map((q,j)=>{const r=P[(j+1)%P.length],l=+(Math.hypot(q[0]-r[0],q[1]-r[1])*a.g).toFixed(2);return l?`<text x="${(X(q)+X(r))/2}" y="${(Y(q)+Y(r))/2-6}" fill="#e6edf3" font-size="13" text-anchor="middle">${l} m</text>`:''}).join('');
+ const d=document.createElement('div');d.className='modal';d.id='skb';d.onclick=e=>{if(e.target===d)d.remove()};d.innerHTML=`<div class="box" style="width:min(640px,100%)"><h3>${E(a.n)} &middot; ${N1(areaSq(a))} m&sup2;</h3><svg viewBox="0 0 600 400" style="width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:8px;margin-top:10px"><polygon points="${P.map(q=>X(q).toFixed(1)+','+Y(q).toFixed(1)).join(' ')}" fill="rgba(240,165,0,.2)" stroke="#f0a500" stroke-width="2"/>${lb}</svg><div class="tools" style="margin-top:10px"><span style="flex:1"></span><button class="btn" onclick="$('skb').remove()">Close</button></div></div>`;document.body.appendChild(d)}
+function areasCard(){const A=NF.areas||[],bt='class="btn sm"';return`<div style="background:var(--s);border:1px solid var(--bd);border-radius:10px;padding:12px;margin:12px 0"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><b style="font:800 12px Cairo;color:var(--ac)">رسومات المساحة</b><span style="font-size:11px;color:var(--mu)">بتتحفظ مع الـ PR</span><span style="flex:1"></span><button ${bt} onclick="skOpen()">\u270E ارسم المبنى</button></div>${A.length?`<div style="display:flex;gap:12px;flex-wrap:wrap">${A.map((a,i)=>`<div style="width:150px">${skMini(a,150)}<div style="margin-top:4px"><b>${E(a.n)}</b></div><div style="font-size:11px;color:var(--mu)">${N1(areaSq(a))} m\u00b2 \u00b7 <span style="cursor:pointer;color:var(--ac)" onclick="skOpen(${i})">تعديل</span> \u00b7 <span style="cursor:pointer;color:var(--rd)" onclick="NF.areas.splice(${i},1);renderNew()">حذف</span></div></div>`).join('')}</div>`:'<div style="font-size:11px;color:var(--mu)">مفيش رسمة لسه.</div>'}</div>`}
+const areasView=p=>(p.areas||[]).length?`<div><div class="sec">رسومات المساحة (${p.areas.length})</div><div style="display:flex;gap:12px;flex-wrap:wrap">${p.areas.map((a,i)=>`<div style="width:150px;cursor:pointer" onclick="skBig(${i})" title="اضغط للتكبير">${skMini(a,150)}<div style="margin-top:4px"><b>${E(a.n)}</b></div><div style="font-size:11px;color:var(--mu)">${N1(areaSq(a))} m\u00b2</div></div>`).join('')}</div></div>`:'';
+
+</script>
+<script>
+/* viewers (anyone who is not Admin) cannot export: buttons are hidden by CSS and every export function refuses to run */
+(function(){const names=['exportDash','pExport','advXlsx','advPdf','advItemXlsx','advProjXlsx','execPdf','expExcel','expCSV','hacPdfTable','hacXlsxTable','hacBuildXlsx','hacXlsxMulti'];
+ names.forEach(n=>{let f;try{f=window[n]}catch(e){}if(typeof f!=='function')return;window[n]=function(){if(!ISADMIN)return toast('التصدير للأدمن بس');return f.apply(this,arguments)}})})();
 </script>
 </body>
 </html>
